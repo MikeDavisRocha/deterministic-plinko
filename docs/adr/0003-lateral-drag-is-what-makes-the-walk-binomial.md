@@ -46,8 +46,8 @@ now lands.
 - The window is narrow. Holding geometry, gravity and restitution fixed and
   moving airDrag alone from 2.0 to 1.5 takes dTV from 0.0093 to 0.0521 and
   starts producing drops that never settle; moving it to 2.5 takes dTV to
-  0.0874. This tuning is a point, not a plateau, and it deserves a regression
-  test rather than a comment.
+  0.0874. This tuning is a point, not a plateau, so the dTV bound is asserted
+  in `src/test/distribution.test.ts` rather than left as a comment.
 - `friction` was held at 0.05 throughout and never swept against the refined
   geometry. There may be a wider basin nearby that this search never looked at.
 - The tails are still thin evidence. At 200 000 drops the outermost bins have
