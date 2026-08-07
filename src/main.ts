@@ -51,9 +51,12 @@ async function boot() {
     onReplay: () => start(lastSeed),
     onMonte: () => {
       const t0 = performance.now();
-      const hist = monteCarlo(board, 10_000);
+      const { counts: hist, unsettled } = monteCarlo(board, 10_000);
       histogram.draw(hist, BOARD.rows);
-      console.log(`10 000 sims in ${(performance.now() - t0).toFixed(1)} ms`);
+      console.log(
+        `10 000 sims in ${(performance.now() - t0).toFixed(1)} ms` +
+        (unsettled ? ` — ${unsettled} never settled` : ""),
+      );
     },
   });
 

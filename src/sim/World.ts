@@ -2,7 +2,7 @@ import { mulberry32 } from "../core/Rng";
 import { clampMagnitude } from "../core/Vec2";
 import { Board } from "./Board";
 import { Disc } from "./Disc";
-import { BOARD, MAX_SPEED, PHYS } from "./config";
+import { maxSpeedOf, PHYS, Phys } from "./config";
 
 export class World {
   readonly disc: Disc;
@@ -10,18 +10,27 @@ export class World {
   binIndex = -1;
   steps = 0;
 
+  private readonly maxSpeed: number;
+  /** All pegs share a radius, so the collision threshold is a constant. */
+  private readonly minDist: number;
+
   /** Deterministic side-channel for the renderer: peg indices hit this step. */
   readonly hits: number[] = [];
 
   constructor(
     readonly board: Board,
     readonly seed: number,
+    readonly phys: Phys = PHYS,
   ) {
+    const spec = board.spec;
+    this.maxSpeed = maxSpeedOf(spec);
+    this.minDist = spec.discRadius + spec.pegRadius;
+
     // The RNG is consumed HERE and nowhere else. step() is a pure function
     // of the previous state, which is what makes replay bit-exact.
     const rng = mulberry32(seed);
-    const jitter = (rng() - 0.5) * 2 * BOARD.spawnJitter;
-    this.disc = new Disc(board.centerX + jitter, BOARD.topY - 40);
+    const jitter = (rng() - 0.5) * 2 * spec.spawnJitter;
+    this.disc = new Disc(board.centerX + jitter, spec.topY - 40, spec.discRadius);
   }
 
   step(dt: number) {
@@ -34,27 +43,50 @@ export class World {
 
     // 1. Semi-implicit (symplectic) Euler: velocity first, then position.
     //    Energy-stable, same cost as explicit Euler.
-    d.vy += PHYS.gravity * dt;
-    if (PHYS.airDrag > 0) {
-      d.vx -= d.vx * PHYS.airDrag * dt;
-      d.vy -= d.vy * PHYS.airDrag * dt;
+    d.vy += this.phys.gravity * dt;
+    if (this.phys.airDrag > 0) {
+      d.vx -= d.vx * this.phys.airDrag * dt;
+      d.vy -= d.vy * this.phys.airDrag * dt;
     }
-    [d.vx, d.vy] = clampMagnitude(d.vx, d.vy, MAX_SPEED);
+    [d.vx, d.vy] = clampMagnitude(d.vx, d.vy, this.maxSpeed);
 
     d.x += d.vx * dt;
     d.y += d.vy * dt;
 
-    // 2. Pegs. Fixed array order — never iterate a Set or object keys here,
-    //    their order is not guaranteed stable across engines.
-    for (let i = 0; i < this.board.pegs.length; i++) {
-      this.resolvePeg(i);
-    }
+    // 2. Pegs, row by row. Fixed array order — never iterate a Set or object
+    //    keys here, their order is not guaranteed stable across engines.
+    this.resolvePegs();
 
     // 3. Walls.
     this.resolveWalls();
 
     // 4. Landing.
     if (d.y >= this.board.binY) this.settle();
+  }
+
+  /**
+   * Broad phase. A row whose y is further than minDist from the disc cannot
+   * contain a collision, and neither can a peg whose x is; both tests are
+   * implied by the distance test they replace, and both read the disc's
+   * position at the moment the naive scan would have read it. So this skips
+   * only pegs the full scan would have rejected — the trajectory is identical
+   * bit for bit, it just stops computing ~160 square roots per step.
+   */
+  private resolvePegs() {
+    const d = this.disc;
+    const rows = this.board.rows;
+    const pegs = this.board.pegs;
+
+    for (let r = 0; r < rows.length; r++) {
+      const row = rows[r];
+      if (Math.abs(row.y - d.y) >= this.minDist) continue;
+
+      const end = row.start + row.count;
+      for (let i = row.start; i < end; i++) {
+        if (Math.abs(pegs[i].x - d.x) >= this.minDist) continue;
+        this.resolvePeg(i);
+      }
+    }
   }
 
   private resolvePeg(index: number) {
@@ -88,15 +120,15 @@ export class World {
     const vn = d.vx * nx + d.vy * ny;
     if (vn >= 0) return;
 
-    d.vx -= (1 + PHYS.restitution) * vn * nx;
-    d.vy -= (1 + PHYS.restitution) * vn * ny;
+    d.vx -= (1 + this.phys.restitution) * vn * nx;
+    d.vy -= (1 + this.phys.restitution) * vn * ny;
 
     // C. Tangential friction.
     const vn2 = d.vx * nx + d.vy * ny;
     const tx = d.vx - vn2 * nx;
     const ty = d.vy - vn2 * ny;
-    d.vx -= tx * PHYS.friction;
-    d.vy -= ty * PHYS.friction;
+    d.vx -= tx * this.phys.friction;
+    d.vy -= ty * this.phys.friction;
 
     this.hits.push(index);
   }
@@ -108,10 +140,10 @@ export class World {
 
     if (d.x < left) {
       d.x = left;
-      if (d.vx < 0) d.vx = -d.vx * PHYS.restitution;
+      if (d.vx < 0) d.vx = -d.vx * this.phys.restitution;
     } else if (d.x > right) {
       d.x = right;
-      if (d.vx > 0) d.vx = -d.vx * PHYS.restitution;
+      if (d.vx > 0) d.vx = -d.vx * this.phys.restitution;
     }
   }
 

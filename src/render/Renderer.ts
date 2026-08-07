@@ -3,7 +3,8 @@ import {
 } from "pixi.js";
 import { Board } from "../sim/Board";
 import { World } from "../sim/World";
-import { BOARD } from "../sim/config";
+// Geometry comes from the board being drawn, not from the module default, so
+// the renderer follows a swept tuning as readily as the shipped one.
 import { PAL } from "./palette";
 
 const TRAIL_LEN = 18;
@@ -30,8 +31,8 @@ export class Renderer {
     app.stage.addChild(root);
 
     this.ghostTex = RenderTexture.create({
-      width: BOARD.width,
-      height: BOARD.height,
+      width: board.spec.width,
+      height: board.spec.height,
       resolution: app.renderer.resolution,
     });
     const ghostSprite = new Sprite(this.ghostTex);
@@ -42,7 +43,7 @@ export class Renderer {
     this.drawPegsOnce();
     this.drawBinsOnce(root);
 
-    this.discG.circle(0, 0, BOARD.discRadius).fill({ color: PAL.accent });
+    this.discG.circle(0, 0, this.board.spec.discRadius).fill({ color: PAL.accent });
     this.discG.visible = false;
   }
 
@@ -61,7 +62,7 @@ export class Renderer {
     for (const bin of this.board.bins) {
       const hot = bin.multiplier >= 3;
       this.binLayer
-        .roundRect(bin.left + 2, y, bin.right - bin.left - 4, BOARD.binHeight, 4)
+        .roundRect(bin.left + 2, y, bin.right - bin.left - 4, this.board.spec.binHeight, 4)
         .fill({ color: PAL.panel })
         .stroke({ width: 1, color: hot ? PAL.win : PAL.peg });
 
@@ -71,7 +72,7 @@ export class Renderer {
       });
       label.anchor.set(0.5);
       label.x = bin.x;
-      label.y = y + BOARD.binHeight / 2;
+      label.y = y + this.board.spec.binHeight / 2;
       root.addChild(label);
     }
   }
@@ -159,7 +160,7 @@ export class Renderer {
 
   clearGhosts() {
     this.app.renderer.render({
-      container: new Graphics().rect(0, 0, BOARD.width, BOARD.height).fill({ color: 0x000000, alpha: 0 }),
+      container: new Graphics().rect(0, 0, this.board.spec.width, this.board.spec.height).fill({ color: 0x000000, alpha: 0 }),
       target: this.ghostTex,
       clear: true,
     });
