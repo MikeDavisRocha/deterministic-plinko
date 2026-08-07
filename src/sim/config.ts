@@ -27,11 +27,18 @@ export interface BoardSpec {
   readonly binHeight: number;
 }
 
+/**
+ * Measured over 200 000 headless drops at this exact tuning: mean fall 4.04 s,
+ * dTV 0.009 from the binomial, no drop failing to settle. See
+ * docs/adr/0003-lateral-drag-is-what-makes-the-walk-binomial.md — in
+ * particular, airDrag is load-bearing here rather than cosmetic, and changing
+ * any of these numbers invalidates the Derived Table.
+ */
 export const PHYS: Phys = {
-  gravity: 900,
-  restitution: 0.5,
+  gravity: 2000,
+  restitution: 0.45,
   friction: 0.05,
-  airDrag: 0.0,
+  airDrag: 2.0,
 };
 
 export const BOARD: BoardSpec = {
@@ -42,8 +49,8 @@ export const BOARD: BoardSpec = {
   spacingX: 36,
   spacingYRatio: 0.87,
   topY: 60,
-  pegRadius: 8,
-  discRadius: 10,
+  pegRadius: 6,
+  discRadius: 8,
   spawnJitter: 1.0,
   binHeight: 44,
 };
@@ -54,10 +61,10 @@ export const BOARD: BoardSpec = {
  * lattice instead of falling through it — a board with non-positive clearance
  * is invalid.
  *
- * These starting values give exactly ZERO clearance (36 - 2*(8+10) = 0) and
- * produce ~13 s falls. The tuning that fixes this without collapsing the
- * distribution is still open; Board logs a warning rather than throwing so the
- * scaffold stays runnable while it is being settled.
+ * The shipped board has 8px of clearance (36 - 2*(6+8)). The spec's original
+ * radii gave exactly zero, which cost ~13 s per fall; Board still warns rather
+ * than throwing, because a swept spec is allowed to be invalid and the sweep
+ * should report that rather than crash.
  */
 export const clearanceOf = (b: BoardSpec) =>
   b.spacingX - 2 * (b.pegRadius + b.discRadius);
@@ -67,13 +74,15 @@ export const CLEARANCE = clearanceOf(BOARD);
 /**
  * Anti-tunneling invariant:
  *   maxSpeed * DT < discRadius + pegRadius
- * With DT = 1/120, r = 10 + 8 = 18px, the ceiling is 2160 px/s.
- * We clamp below that instead of adding CCD — the cheap correct fix here.
+ * With DT = 1/120 and r = 8 + 6 = 14px, the ceiling is 1680 px/s and we clamp
+ * at 85% of it instead of adding CCD — the cheap correct fix here. At the
+ * shipped tuning the clamp never actually binds (measured over 20 000 drops),
+ * so it is a guard rail rather than part of the physics.
  */
 export const maxSpeedOf = (b: BoardSpec) =>
   ((b.discRadius + b.pegRadius) / DT) * 0.85;
 
-export const MAX_SPEED = maxSpeedOf(BOARD); // 1836 px/s
+export const MAX_SPEED = maxSpeedOf(BOARD); // 1428 px/s
 
 /**
  * The industry-standard 16-row medium-risk table. Pays exactly 98.99% against
