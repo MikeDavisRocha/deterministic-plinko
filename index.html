@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Deterministic Plinko</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  </head>
+  <body>
+    <main id="app">
+      <div id="stage"></div>
+      <aside id="panel">
+        <div class="field">
+          <label for="seed">seed</label>
+          <input id="seed" type="text" inputmode="numeric" value="1" />
+        </div>
+        <div class="row">
+          <button id="drop" class="primary">drop</button>
+          <button id="replay">replay</button>
+        </div>
+        <button id="monte">run 10 000 sims</button>
+        <div id="histogram"></div>
+        <dl id="readout">
+          <dt>drops</dt><dd id="r-drops">0</dd>
+          <dt>last bin</dt><dd id="r-bin">—</dd>
+          <dt>payout</dt><dd id="r-payout">—</dd>
+          <dt>tick</dt><dd id="r-tick">120 hz</dd>
+          <dt>fps</dt><dd id="r-fps">—</dd>
+        </dl>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
