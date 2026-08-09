@@ -2,26 +2,10 @@ import { Board } from "../sim/Board";
 import { World } from "../sim/World";
 import { DT } from "../sim/config";
 
-/**
- * FNV-1a over the raw bit patterns of a trajectory.
- *
- * Hashing the bytes rather than the printed numbers is the point: two engines
- * that disagree by one ULP produce identical `toFixed(6)` output and different
- * bit patterns, and it is the bit patterns that decide whether a replay
- * verifies. See docs/adr/0002-no-math-hypot-in-the-solver.md.
- */
-export function hashFloats(values: readonly number[]): string {
-  const buf = new DataView(new ArrayBuffer(8));
-  let h = 0x811c9dc5;
-  for (const v of values) {
-    buf.setFloat64(0, v);
-    for (let b = 0; b < 8; b++) {
-      h ^= buf.getUint8(b);
-      h = Math.imul(h, 0x01000193) >>> 0;
-    }
-  }
-  return h.toString(16).padStart(8, "0");
-}
+// Lives in core/ because src/sim/fingerprint.ts hashes the tuning with it, and
+// sim/ must not import from test/.
+export { hashFloats } from "../core/hash";
+import { hashFloats } from "../core/hash";
 
 /** Position and velocity at every step of one drop, at the shipped tuning. */
 export function trajectory(seed: number): number[] {

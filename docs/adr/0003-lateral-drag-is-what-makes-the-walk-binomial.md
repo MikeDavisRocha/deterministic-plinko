@@ -50,10 +50,22 @@ now lands.
   in `src/test/distribution.test.ts` rather than left as a comment.
 - `friction` was held at 0.05 throughout and never swept against the refined
   geometry. There may be a wider basin nearby that this search never looked at.
-- The tails are still thin evidence. At 200 000 drops the outermost bins have
-  counts of 1 and 3 against an expectation of 3.1 each. That is enough to say
-  the bins are reachable; it is nowhere near enough to solve the Derived
-  Table's 110x entries against, which is the sample-count problem ADR 0001
-  already flagged.
+- ~~The tails are still thin evidence.~~ Settled by the 100 000 000-drop run in
+  `src/sim/measured.data.ts`, and the answer revises this document's headline.
+  The walk is binomial **in the body only**: bins 3..13 land within 0.6% of the
+  binomial, but the outermost bins come in at 0.46x and 0.49x of it and the next
+  pair in at 1.36x and 1.38x. At 200 000 drops the outer bins showed counts of 1
+  and 3 against an expectation of 3.1, which looked like agreement; it was too
+  few samples to see a factor-of-two deficit.
+- The RTP excess lives in the near tail, not the extreme one. Against the
+  Reference Table the measured distribution pays 100.51%, and the fat 41x and
+  10x bins supply about +1.6 points of that while the thin 110x bins give back
+  roughly -0.2. Damping lateral velocity fixed the runaway tails of the
+  airDrag-0 board and slightly overshot at the extremes — worth knowing before
+  anyone tunes further, since the obvious lever (more drag) pushes the wrong
+  bins.
+- The sample-count problem ADR 0001 flagged is closed for now: bin 0 lands 700
+  times at 100 million, a 3.8% relative standard error, which is finer than the
+  rounding its Derived Table multiplier will get.
 - Per ADR 0001 this tuning change invalidates any previously generated Derived
   Table. None exists yet, so the cost is zero exactly once.

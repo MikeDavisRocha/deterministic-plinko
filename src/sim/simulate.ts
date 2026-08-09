@@ -3,7 +3,7 @@ import { World } from "./World";
 import { DT, PHYS, Phys } from "./config";
 
 /** Guard against a drop that never settles; ~166 simulated seconds. */
-const MAX_STEPS = 20_000;
+export const MAX_STEPS = 20_000;
 
 /** Returns the settled bin index, or -1 if the drop never settled. */
 export function simulate(board: Board, seed: number, phys: Phys = PHYS): number {

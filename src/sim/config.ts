@@ -28,11 +28,21 @@ export interface BoardSpec {
 }
 
 /**
- * Measured over 200 000 headless drops at this exact tuning: mean fall 4.04 s,
- * dTV 0.009 from the binomial, no drop failing to settle. See
+ * Measured over 100 000 000 headless drops at this exact tuning and committed
+ * in src/sim/measured.data.ts: mean fall 4.035 s, dTV 0.0028 from the binomial,
+ * all 17 bins reached, and 3 drops in 100 million that never settle. See
  * docs/adr/0003-lateral-drag-is-what-makes-the-walk-binomial.md — in
- * particular, airDrag is load-bearing here rather than cosmetic, and changing
- * any of these numbers invalidates the Derived Table.
+ * particular, airDrag is load-bearing here rather than cosmetic.
+ *
+ * The walk is binomial in the body and not in the tail: bins 3..13 land within
+ * 0.6% of the binomial, while the outermost bins come in at 0.46x and the next
+ * pair at 1.36x. Since those are the bins carrying 110x and 41x, the Reference
+ * Table pays 100.51% here rather than its binomial 98.99% — which is ADR 0001's
+ * whole argument for a second table, now as a number rather than a worry.
+ *
+ * Changing any of these constants invalidates the Measured Distribution and the
+ * Derived Table solved against it. That used to be a comment; it is now a test
+ * failure, via the fingerprint in src/sim/fingerprint.ts.
  */
 export const PHYS: Phys = {
   gravity: 2000,

@@ -35,6 +35,7 @@ describe("the solver's engine-dependent-operation ban", () => {
     "src/core/Vec2.ts", // outside src/sim/, but World imports it
     "src/core/Rng.ts",
     "src/core/Loop.ts",
+    "src/core/hash.ts", // decides whether a golden hash or a fingerprint matches
   ];
 
   it.each(sources)("%s does not call Math.hypot", (file) => {

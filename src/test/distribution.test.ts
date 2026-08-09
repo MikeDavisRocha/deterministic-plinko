@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { Board } from "../sim/Board";
 import { World } from "../sim/World";
-import { monteCarlo } from "../sim/simulate";
+import { MAX_STEPS, monteCarlo } from "../sim/simulate";
 import { BOARD, DT, REFERENCE_TABLE } from "../sim/config";
 
 const RUNS = 20_000;
@@ -69,7 +69,7 @@ describe("fall time", () => {
     const SAMPLE = 2000;
     for (let s = 0; s < SAMPLE; s++) {
       const w = new World(board, s);
-      while (!w.settled && w.steps < 20_000) w.step(DT);
+      while (!w.settled && w.steps < MAX_STEPS) w.step(DT);
       steps += w.steps;
       if (w.steps > max) max = w.steps;
     }
