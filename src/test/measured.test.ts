@@ -7,6 +7,7 @@ import { TUNING_FINGERPRINT } from "../sim/fingerprint";
 import {
   MEASURED,
   MEASURED_COUNTS,
+  MEASURED_SYMMETRIC,
   MEASURED_MEAN_FALL_SECONDS,
   MEASURED_SAMPLES,
   MEASURED_TUNING,
@@ -87,6 +88,29 @@ describe("the committed Measured Distribution", () => {
 
   it("normalises to a probability distribution", () => {
     expect(MEASURED.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
+  });
+
+  it("symmetrises to a distribution that is actually symmetric", () => {
+    expect(MEASURED_SYMMETRIC.reduce((a, b) => a + b, 0)).toBeCloseTo(1, 12);
+    for (let i = 0; i < MEASURED_SYMMETRIC.length; i++) {
+      expect(MEASURED_SYMMETRIC[i]).toBe(MEASURED_SYMMETRIC[MEASURED_SYMMETRIC.length - 1 - i]);
+    }
+  });
+
+  /**
+   * The measured lopsidedness the symmetric view exists to remove. Pinned so it
+   * stays a known quantity: if a reseeding change makes it vanish, symmetrising
+   * has become unnecessary, and if it grows, something else is wrong.
+   */
+  it("is lopsided only to the degree the sample explains", () => {
+    let chi2 = 0;
+    for (let i = 0; i < 8; i++) {
+      const l = MEASURED_COUNTS[i];
+      const r = MEASURED_COUNTS[MEASURED_COUNTS.length - 1 - i];
+      chi2 += (l - r) ** 2 / (l + r);
+    }
+    expect(chi2).toBeGreaterThan(10); // it really is lopsided — 26.5 as committed
+    expect(chi2).toBeLessThan(60);
   });
 
   it("keeps the fall time the tuning was chosen for", () => {

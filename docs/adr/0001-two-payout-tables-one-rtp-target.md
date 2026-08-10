@@ -27,5 +27,8 @@ project rather than an embarrassment to hide.
   with a regenerate-me message the moment the tree stops matching it. A second
   test reproduces the run's first 20 000 seeds bin for bin, so an artefact left
   behind by an older *solver* — same tuning, changed collision code — fails too.
+- The Derived Table is solved against the *symmetrised* measured distribution,
+  not the raw counts. ADR 0004 has the reasoning and the invariant that licenses
+  it.
 - Two tables means two RTP numbers to keep honest in the README. Neither may be
   quoted without saying which mode and how many samples produced it.

@@ -98,6 +98,14 @@ count that produced it, because the [[Derived Table]] is only as trustworthy as
 the tail estimates behind it.
 _Avoid_: histogram, empirical curve
 
+**Symmetrised Distribution**:
+The [[Measured Distribution]] with mirrored bins averaged. What the
+[[Derived Table]] is actually solved against, because the solver is provably
+antisymmetric and any left/right difference in the counts therefore belongs to
+the seed sample rather than to the board. See
+docs/adr/0004-the-measured-lopsidedness-is-the-samples-not-the-boards.md.
+_Avoid_: smoothed distribution, folded distribution
+
 **Reference Table**:
 The industry-standard 16-row medium-risk multiplier table. Pays exactly 98.99%
 against a true binomial. Used by [[Outcome-First Mode]] unchanged.

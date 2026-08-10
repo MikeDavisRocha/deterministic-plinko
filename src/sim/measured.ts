@@ -38,6 +38,30 @@ export const MEASURED: readonly number[] = MEASURED_COUNTS.map(
 );
 
 /**
+ * The same distribution with mirrored bins averaged, and the one the Derived
+ * Table should be solved against.
+ *
+ * This is a correction, not a cosmetic smoothing. The counts are measurably
+ * lopsided — chi-square 26.5 on 8 df, p = 8.5e-4, worst at bins 7/9 — but the
+ * solver is proven to have no side: spawn jitter is the only randomness in a
+ * drop, the board is an exact mirror image, and the map from jitter to bin is
+ * antisymmetric for every one of a million pairs tested. So the lopsidedness
+ * belongs to which jitters mulberry32 hands out for sequential seeds, and
+ * averaging removes an artefact of the sample rather than hiding a property of
+ * the board. See the "mirror symmetry" suite in src/test/determinism.test.ts.
+ *
+ * It also doubles the effective sample on every pair, which is worth most where
+ * the samples are thinnest: bins 0 and 16 go from 700 and 754 apart to 1454
+ * together, a 2.6% relative standard error instead of 3.8%.
+ *
+ * RTP is unaffected. Both payout tables are symmetric, and averaging mirrored
+ * probabilities cannot change a sum weighted by a symmetric table.
+ */
+export const MEASURED_SYMMETRIC: readonly number[] = MEASURED_COUNTS.map(
+  (c, i) => (c + MEASURED_COUNTS[MEASURED_COUNTS.length - 1 - i]) / 2 / MEASURED_SETTLED,
+);
+
+/**
  * Bins some seed actually reached. Measurement cannot prove the negative — a
  * bin with no hits is not proven unreachable, only rarer than
  * [[UNOBSERVED_CEILING]] — so an empty bin is a prompt to measure harder before

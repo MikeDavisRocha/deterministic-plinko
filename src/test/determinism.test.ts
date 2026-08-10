@@ -2,6 +2,10 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DT, MAX_SPEED, BOARD, CLEARANCE } from "../sim/config";
+import { Board } from "../sim/Board";
+import { World } from "../sim/World";
+import { MAX_STEPS } from "../sim/simulate";
+import { mulberry32 } from "../core/Rng";
 import { verifyDeterminism } from "./determinism";
 import { GOLDEN, trajectoryHash } from "./golden";
 
@@ -55,5 +59,67 @@ describe("board invariants", () => {
 
   it("cannot tunnel a peg in one step", () => {
     expect(MAX_SPEED * DT).toBeLessThan(BOARD.discRadius + BOARD.pegRadius);
+  });
+
+  it("places its pegs and bins in exact mirror image", () => {
+    const board = new Board();
+    for (const peg of board.pegs) {
+      // Exact, not approximate: peg x land on integers about centerX = 350, so
+      // a mirrored pair has no rounding to forgive. Anything else means the
+      // lattice is subtly off-centre and mirror symmetry below cannot hold.
+      expect(board.pegs.some((p) => p.y === peg.y && p.x === 2 * board.centerX - peg.x)).toBe(true);
+    }
+    const bins = board.bins;
+    for (let i = 0; i < bins.length; i++) {
+      expect(bins[i].left).toBe(2 * board.centerX - bins[bins.length - 1 - i].right);
+    }
+  });
+});
+
+/**
+ * The solver has no side.
+ *
+ * Spawn jitter is the only randomness in a drop; everything after it is a
+ * deterministic map from that one number to a bin. On a board whose geometry is
+ * an exact mirror image, that map must be antisymmetric — spawn at centerX - j
+ * and you land in bin 16 - b, where centerX + j lands in b.
+ *
+ * This matters beyond tidiness. The 100 000 000-drop Measured Distribution is
+ * measurably lopsided (chi-square 26.5 on 8 df, p = 8.5e-4), and this invariant
+ * is what proves the lopsidedness belongs to the jitters mulberry32 hands out
+ * for sequential seeds rather than to the physics. That in turn is what licenses
+ * MEASURED_SYMMETRIC, which the Derived Table is solved against.
+ *
+ * A few thousand pairs here; `npm run symmetry` sweeps a million.
+ */
+describe("mirror symmetry", () => {
+  const board = new Board();
+  const lastBin = board.bins.length - 1;
+
+  const binFromSpawn = (x: number) => {
+    const w = new World(board, 0);
+    w.disc.x = x;
+    w.disc.prevX = x;
+    while (!w.settled && w.steps < MAX_STEPS) w.step(DT);
+    return w.binIndex;
+  };
+
+  const mirrors = (j: number) =>
+    binFromSpawn(board.centerX + j) + binFromSpawn(board.centerX - j) === lastBin;
+
+  it("mirrors the bin for every jitter the RNG produces", () => {
+    for (let seed = 0; seed < 2000; seed++) {
+      const j = (mulberry32(seed)() - 0.5) * 2 * BOARD.spawnJitter;
+      expect(mirrors(j), `seed ${seed}, jitter ${j}`).toBe(true);
+    }
+  });
+
+  it("mirrors the bin across the whole jitter range", () => {
+    // An even grid reaches spawns the RNG may never pick.
+    const N = 2000;
+    for (let k = 1; k <= N; k++) {
+      const j = (k / (N + 1)) * BOARD.spawnJitter;
+      expect(mirrors(j), `jitter ${j}`).toBe(true);
+    }
   });
 });
