@@ -212,3 +212,11 @@ The reasoning lives in [`docs/adr/`](docs/adr), and the domain language in
 ## Stack
 
 Pixi.js v8 · TypeScript · Vite · Vitest
+
+## Also
+
+**[Swept Breakout](https://github.com/MikeDavisRocha/swept-breakout)** — the same
+discipline pointed at a different problem: continuous collision detection, where
+the ball's path is swept against every surface so no brick is shot through at
+any speed. Where this project's hard part is the mathematics, that one's is the
+collision.
