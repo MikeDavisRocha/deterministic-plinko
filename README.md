@@ -4,13 +4,16 @@
 
 ![The board mid-session, ghost trails accumulating](docs/screenshot.jpg)
 
-A Plinko board simulated by a hand-written physics solver — no physics engine —
-built to put two things side by side: a physically honest simulation, and the
-outcome-first architecture real money games are actually required to use.
+A complete 2D game in **Pixi.js v8**, running on a physics solver written from
+scratch — no physics engine. Every collision, bounce and landing is code in this
+repository, tuned by measurement rather than by feel, and the whole simulation
+runs headless as easily as it renders.
 
-Both modes run **the same solver, the same board and the same trajectories**.
-They differ in who decides the bin, and both land on the same return to player
-by opposite routes. That contrast is the point of the project.
+It ships two game modes on one board, and they run **the same solver, the same
+geometry and the same trajectories**. What differs is who decides where the disc
+lands: in one the physics decides, in the other the outcome is committed to
+before the disc moves and the board is steered to it. Both pay the same return
+to player by opposite routes.
 
 | | Physics-First | Outcome-First |
 |---|---|---|
@@ -23,7 +26,59 @@ by opposite routes. That contrast is the point of the project.
 Neither figure is quotable without saying which mode produced it. One is a
 measurement with a sample size behind it; the other is a rational number.
 
-## The interesting parts
+## The physics
+
+**Fixed timestep with an accumulator.** Physics advances in constant 1/120 s
+slices no matter the frame rate, with the leftover handed to the renderer as an
+interpolation alpha — so motion stays smooth at 60 Hz while the simulation stays
+identical on every machine. Semi-implicit Euler: velocity first, then position,
+which is energy-stable at the same cost as the naive form.
+
+**Tunneling is handled by invariant, not brute force.** Rather than shrinking
+the timestep until the disc stops passing through pegs, velocity is clamped so
+`maxSpeed × dt < discRadius + pegRadius` always holds — no discrete step can
+skip a peg. At the shipped tuning the clamp never actually binds, so it costs
+nothing and cannot be the thing that changes a trajectory.
+
+**Collision resolution in three parts**: positional correction out of
+penetration, a velocity response that skips already-separating contacts (without
+that guard the disc sticks and jitters on a peg), and tangential friction. Exact
+overlap is caught and given a deterministic normal, because dividing by a zero
+distance poisons the entire run with NaN.
+
+**A broad phase that provably doesn't change the answer.** Pegs are indexed by
+row; a row whose `y` is further than the contact radius cannot hold a collision,
+and neither can a peg whose `x` is. Both tests are implied by the distance test
+they replace, so the trajectory is identical bit for bit — it just stops
+computing ~160 square roots per step.
+
+**Tuned to a feel, then measured.** Fall time is a target in its own right, not
+a consequence: the board is tuned to land at 4.035 simulated seconds, long
+enough to watch and short enough to want another. Lateral drag is what makes the
+walk read as a proper Plinko rather than a disc skating down one side.
+
+## Feel
+
+Peg contacts flash, the trail fades behind the disc, and every trajectory bakes
+into a persistent low-alpha texture — after a few hundred drops the board has
+drawn its own distribution without a chart.
+
+Landing is scaled by what the bin paid, on a log curve because the table spans
+0.3x to 230x: the bin lights and its label pops, sparks fan out of the mouth,
+and the screen shakes in proportion. A 0.3x gets a shrug; 230x shakes.
+
+**Audio is synthesised at runtime** — no files, no fetch, nothing to 404. That
+is also the only way to make a peg click *follow the physics*: pitch and volume
+come from the impact speed the solver just produced, so the board sounds busy
+while the disc is fast and thins out as it settles. Wins climb a pentatonic
+scale, further the bigger they are, so the payout is audible before you read it.
+Muting is remembered between sessions.
+
+None of it can reach the simulation. The presentation layer reads the world and
+never writes to it, which is what keeps a muted replay bit-identical to a loud
+one.
+
+## The mathematics
 
 **A solver cannot be tuned to an RTP target.** Sweeping restitution 0.10–0.70
 and gravity 900–3000 produced measured RTPs from 42% to 2813%, because the
@@ -73,6 +128,8 @@ under the physics, so the search that costs nothing in the body costs ten
 seconds in the tail — and capping the attempts is precisely what a commitment
 forbids.
 
+## Engineering
+
 **Bit-exact determinism.** The seeded PRNG is consumed once at spawn; `step()`
 is a pure function of the previous state. The same seed replays the same
 trajectory, verified by comparing 4-tuples of position and velocity with strict
@@ -80,11 +137,6 @@ equality, and pinned by committed hashes of the raw float bit patterns — becau
 two engines that disagree by one ULP print identical `toFixed(6)` and differ
 where it matters. `Math.hypot`, `Math.random` and `Date.now` are banned in the
 solver and in the fairness code, and a test reads the sources to enforce it.
-
-**Tunneling is handled by invariant, not brute force.** Rather than shrinking
-the timestep, velocity is clamped so `maxSpeed × dt < discRadius + pegRadius`
-always holds. At the shipped tuning the clamp never actually binds, so it is a
-guard rail rather than part of the physics.
 
 **Simulation decoupled from rendering.** Nothing under `src/sim/` imports Pixi,
 which is what makes the Monte Carlo trivial. On an AMD Ryzen 5 5500 under Node

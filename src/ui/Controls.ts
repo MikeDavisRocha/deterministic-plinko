@@ -8,6 +8,7 @@ type Handlers = {
   /** A new client seed burns the session: new server seed, new commitment. */
   onClientSeed: (value: string) => void;
   onReveal: () => void;
+  onMute: () => void;
 };
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -33,6 +34,7 @@ export class Controls {
     el<HTMLButtonElement>("replay").onclick = () => h.onReplay();
     el<HTMLButtonElement>("monte").onclick = () => h.onMonte();
     el<HTMLButtonElement>("reveal").onclick = () => h.onReveal();
+    el<HTMLButtonElement>("mute").onclick = () => h.onMute();
 
     for (const mode of ["physics", "outcome"] as const) {
       this.modeButtons[mode].onclick = () => h.onMode(mode);
@@ -50,6 +52,10 @@ export class Controls {
     for (const id of ["l-target", "r-target", "l-nonce", "r-nonce"]) {
       el(id).hidden = mode !== "outcome";
     }
+  }
+
+  setMuted(muted: boolean) {
+    el("mute").textContent = muted ? "sound: off" : "sound: on";
   }
 
   get seed(): number {

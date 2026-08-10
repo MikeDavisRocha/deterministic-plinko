@@ -1,4 +1,5 @@
 import { Application } from "pixi.js";
+import { Sfx } from "./audio/Sfx";
 import { Loop } from "./core/Loop";
 import { verifyCommit } from "./fair/commitment";
 import { Session } from "./fair/session";
@@ -69,6 +70,15 @@ async function boot() {
     outcome: new Array(boards.outcome.bins.length).fill(0),
   };
   const drops: Record<Mode, number> = { physics: 0, outcome: 0 };
+
+  const sfx = new Sfx();
+  sfx.muted = localStorage.getItem("plinko.muted") === "1";
+
+  // Audio cannot start before a gesture, so the context waits for the first
+  // one rather than being built suspended at boot and never recovering.
+  const unlock = () => sfx.unlock();
+  addEventListener("pointerdown", unlock, { once: true });
+  addEventListener("keydown", unlock, { once: true });
 
   let world: World | null = null;
   let counted = false;
@@ -147,6 +157,12 @@ async function boot() {
 
     onMode: setMode,
 
+    onMute: () => {
+      sfx.muted = !sfx.muted;
+      localStorage.setItem("plinko.muted", sfx.muted ? "1" : "0");
+      controls.setMuted(sfx.muted);
+    },
+
     // A new client seed is a new session, so the old server seed has to be
     // revealed on the way out — which is the cycle a real operator runs.
     onClientSeed: () => startSession(),
@@ -188,11 +204,23 @@ async function boot() {
   });
 
   app.ticker.add((ticker) => {
-    const alpha = loop.advance(ticker.deltaMS / 1000, () => world?.step(DT));
+    // Sound is emitted from inside the step, not from the frame: physics runs
+    // at 120 Hz and rendering at 60, so reading hits once per frame would drop
+    // every second peg the disc touched.
+    const alpha = loop.advance(ticker.deltaMS / 1000, () => {
+      if (!world) return;
+      world.step(DT);
+      if (world.hits.length) {
+        const { vx, vy } = world.disc;
+        sfx.peg(Math.sqrt(vx * vx + vy * vy));
+      }
+    });
     renderer.draw(world, alpha, ticker.deltaMS);
 
     if (world?.settled && world.binIndex >= 0 && !counted) {
       counted = true;
+      sfx.settle(world.multiplier);
+      renderer.celebrate(world.binIndex, world.multiplier);
       drops[mode]++;
       counts[mode][world.binIndex]++;
       histogram.draw(counts[mode], BOARD.rows);
@@ -220,6 +248,7 @@ async function boot() {
 
   startSession();
   controls.setMode(mode);
+  controls.setMuted(sfx.muted);
   controls.setReadout("rtp", rtp[mode]);
   dropPhysics(1);
 }

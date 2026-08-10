@@ -24,6 +24,14 @@ export class Renderer {
   private trail: number[] = [];          // flat [x0,y0,x1,y1,...]
   private flashes = new Map<number, number>(); // pegIndex -> ms remaining
 
+  private root!: Container;
+  private burstLayer = new Graphics();
+  /** Flat [x, y, vx, vy, msLeft, msTotal, color] per spark. */
+  private sparks: number[] = [];
+  private shake = 0;
+  private binGlow = -1;
+  private binGlowMs = 0;
+
   constructor(
     private app: Application,
     private board: Board,
@@ -32,6 +40,7 @@ export class Renderer {
     // That is why switching modes redraws the bins and leaves everything else
     // — pegs, ghost texture, trail — exactly where it was.
     const root = new Container();
+    this.root = root;
     app.stage.addChild(root);
 
     this.ghostTex = RenderTexture.create({
@@ -44,7 +53,7 @@ export class Renderer {
 
     root.addChild(
       ghostSprite, this.binLayer, this.binLabels,
-      this.pegLayer, this.flashLayer, this.liveTrail, this.discG,
+      this.pegLayer, this.flashLayer, this.liveTrail, this.discG, this.burstLayer,
     );
 
     this.drawPegsOnce();
@@ -68,6 +77,12 @@ export class Renderer {
    */
   setBoard(board: Board) {
     this.board = board;
+    // A glow in flight was scaling a label that drawBins is about to destroy,
+    // and its sparks belong to the drop that just ended on the old table.
+    this.binGlow = -1;
+    this.binGlowMs = 0;
+    this.sparks.length = 0;
+    this.shake = 0;
     this.drawBins();
   }
 
@@ -97,9 +112,49 @@ export class Renderer {
     }
   }
 
+  /**
+   * A disc has landed. Everything here is scaled by what the bin paid, so the
+   * board reacts in proportion — 0.3x gets a quiet glow, 230x shakes the
+   * screen. Purely presentational: called after the simulation is already over
+   * and unable to affect it.
+   */
+  celebrate(binIndex: number, multiplier: number) {
+    const bin = this.board.bins[binIndex];
+    if (!bin) return;
+
+    // log2 because the table spans 0.3x to 230x; linear scaling would make
+    // everything below 10x indistinguishable.
+    const weight = Math.min(1, Math.max(0, Math.log2(multiplier + 1) / Math.log2(231)));
+    const win = multiplier >= 1;
+
+    this.binGlow = binIndex;
+    this.binGlowMs = 260 + weight * 500;
+    this.shake = win ? weight * 9 : 0;
+
+    const count = win ? Math.round(6 + weight * 44) : 4;
+    const color = multiplier >= 3 ? PAL.win : win ? PAL.accent : PAL.peg;
+    const y = this.board.binY;
+
+    for (let i = 0; i < count; i++) {
+      // Fanned upward out of the bin mouth. Randomness here is presentation
+      // only — it never touches the solver, so a replay looks alike without
+      // being required to spark identically.
+      const angle = -Math.PI / 2 + (Math.random() - 0.5) * (win ? 2.0 : 0.9);
+      const speed = (60 + Math.random() * 190) * (0.45 + weight);
+      const life = 380 + Math.random() * 520;
+      this.sparks.push(
+        bin.x + (Math.random() - 0.5) * (bin.right - bin.left) * 0.7, y,
+        Math.cos(angle) * speed, Math.sin(angle) * speed,
+        life, life, color,
+      );
+    }
+  }
+
   /** Call once per rendered frame. `alpha` comes from the Loop. */
   draw(world: World | null, alpha: number, deltaMS: number) {
     this.tickFlashes(deltaMS);
+    this.tickSparks(deltaMS);
+    this.tickShake(deltaMS);
 
     if (!world || world.settled) {
       this.discG.visible = false;
@@ -119,6 +174,82 @@ export class Renderer {
     this.pushTrail(x, y);
     this.drawLiveTrail();
     this.bakeGhostSegment();
+  }
+
+  /**
+   * The bin that just paid, lit and lifted for a moment. Drawn into the flash
+   * layer rather than the bin layer so it decays without forcing the static
+   * bins to be rebuilt every frame.
+   */
+  private drawBinGlow(deltaMS: number) {
+    if (this.binGlow < 0) return;
+
+    this.binGlowMs -= deltaMS;
+    const bin = this.board.bins[this.binGlow];
+    if (this.binGlowMs <= 0 || !bin) {
+      this.binGlow = -1;
+      for (const label of this.binLabels.children) label.scale.set(1);
+      return;
+    }
+
+    const t = Math.min(1, this.binGlowMs / 260);
+    const hot = bin.multiplier >= 3;
+    const h = this.board.spec.binHeight;
+
+    this.flashLayer
+      .roundRect(bin.left + 2, this.board.binY, bin.right - bin.left - 4, h, 4)
+      .fill({ color: hot ? PAL.win : PAL.accent, alpha: 0.10 + t * 0.35 })
+      .stroke({ width: 1, color: hot ? PAL.win : PAL.accent, alpha: t });
+
+    // The label rides the same curve, which is what sells it as one event
+    // rather than a rectangle that happened to light up behind some text.
+    this.binLabels.children[this.binGlow]?.scale.set(1 + t * 0.35);
+  }
+
+  /** Sparks are a flat array so a burst of fifty allocates nothing per frame. */
+  private tickSparks(deltaMS: number) {
+    this.burstLayer.clear();
+    if (!this.sparks.length) return;
+
+    const dt = deltaMS / 1000;
+    const STRIDE = 7;
+
+    for (let i = this.sparks.length - STRIDE; i >= 0; i -= STRIDE) {
+      const left = (this.sparks[i + 4] -= deltaMS);
+      if (left <= 0) {
+        // Swap-remove: order does not matter to a particle field, and this
+        // keeps removal O(1) instead of shifting the tail every frame.
+        for (let k = 0; k < STRIDE; k++) {
+          this.sparks[i + k] = this.sparks[this.sparks.length - STRIDE + k];
+        }
+        this.sparks.length -= STRIDE;
+        continue;
+      }
+
+      this.sparks[i + 3] += 620 * dt;                 // gravity, in px/s^2
+      this.sparks[i] += this.sparks[i + 2] * dt;
+      this.sparks[i + 1] += this.sparks[i + 3] * dt;
+
+      const t = left / this.sparks[i + 5];
+      this.burstLayer
+        .circle(this.sparks[i], this.sparks[i + 1], 1 + t * 2)
+        .fill({ color: this.sparks[i + 6], alpha: t * t });
+    }
+  }
+
+  private tickShake(deltaMS: number) {
+    if (this.shake <= 0.05) {
+      this.shake = 0;
+      this.root.position.set(0, 0);
+      return;
+    }
+    // Halve every ~60ms, so even the biggest hit is done inside a fifth of a
+    // second. Shake that outlasts the moment reads as a bug.
+    this.shake *= Math.pow(0.5, deltaMS / 60);
+    this.root.position.set(
+      (Math.random() - 0.5) * 2 * this.shake,
+      (Math.random() - 0.5) * 2 * this.shake,
+    );
   }
 
   private pushTrail(x: number, y: number) {
@@ -160,6 +291,7 @@ export class Renderer {
 
   private tickFlashes(deltaMS: number) {
     this.flashLayer.clear();
+    this.drawBinGlow(deltaMS);
     for (const [index, left] of this.flashes) {
       const next = left - deltaMS;
       if (next <= 0) { this.flashes.delete(index); continue; }

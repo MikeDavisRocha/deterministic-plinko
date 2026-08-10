@@ -100,6 +100,9 @@ button:disabled { opacity: 0.4; cursor: default; }
 
 .dim { color: var(--line); letter-spacing: 0; }
 
+/* Secondary next to a full-width action: it should not claim equal weight. */
+button.narrow { flex: 0 0 auto; padding-left: 12px; padding-right: 12px; letter-spacing: 0; }
+
 /* The commitment and the revealed seed are 64 hex characters each. They wrap
    rather than truncate: a hash a player cannot read in full is a hash they
    cannot check. */
