@@ -42,7 +42,30 @@ async function boot() {
     resolution: Math.min(window.devicePixelRatio || 1, 2),
     autoDensity: true,
   });
-  document.getElementById("stage")!.appendChild(app.canvas);
+  const stage = document.getElementById("stage")!;
+  stage.appendChild(app.canvas);
+
+  /**
+   * Make the canvas fit its column.
+   *
+   * This has to be set here, in JavaScript, and that is not a style choice:
+   * `autoDensity` writes a fixed pixel size into the canvas's *inline* style,
+   * and an inline style beats every rule in the stylesheet. So the responsive
+   * rule in style.css was being silently overruled, and the board kept its
+   * 700px width inside a 390px phone — the layout went to a single column
+   * correctly and then overflowed it by 322px, cutting the lattice in half.
+   *
+   * Only the presentation is scaled. The drawing buffer stays at the board's
+   * own size, so the disc still falls through a 700x620 world; on a phone the
+   * result is downscaled from a larger buffer and comes out sharper, not
+   * blurrier. Resizing the board itself is not an option — its dimensions are
+   * in the tuning fingerprint, and changing them invalidates the 100-million
+   * drop measurement.
+   */
+  stage.style.width = "100%";
+  stage.style.maxWidth = `${BOARD.width}px`;
+  app.canvas.style.width = "100%";
+  app.canvas.style.height = "auto";
 
   /**
    * One board per mode and risk, differing only in the payout table — the

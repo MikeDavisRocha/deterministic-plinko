@@ -146,8 +146,18 @@ button.narrow { flex: 0 0 auto; padding-left: 12px; padding-right: 12px; letter-
 #readout.secondary { font-size: 11px; opacity: 0.75; }
 #readout.secondary dd { color: var(--text); }
 
+/* The canvas's own responsive size is set in main.ts, not here: Pixi writes an
+   inline width onto it and an inline style outranks this file. */
 @media (max-width: 900px) {
-  #app { flex-direction: column; padding: 12px; }
-  #panel { width: 100%; }
-  #stage canvas { width: 100%; height: auto; }
+  #app { flex-direction: column; align-items: center; padding: 10px; gap: 12px; }
+  #stage { margin: 0 auto; }
+
+  /* Tighter on a phone, where vertical space is the scarce one — this is what
+     keeps `drop` above the fold under the board rather than a scroll away. */
+  #panel { width: 100%; max-width: 520px; padding: 14px; gap: 10px; }
+  #readout { gap: 4px 10px; padding-top: 10px; }
+  #histogram { padding-top: 10px; }
+  .field label { margin-bottom: 4px; }
+  input { padding: 8px 10px; }
+  button { padding: 9px; }
 }
