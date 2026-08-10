@@ -1,4 +1,5 @@
-import { BOARD, BoardSpec, clearanceOf, REFERENCE_TABLE } from "./config";
+import { BOARD, BoardSpec, clearanceOf } from "./config";
+import { DERIVED_TABLE } from "./derived";
 
 export interface Peg { x: number; y: number; r: number; }
 export interface Bin { x: number; left: number; right: number; multiplier: number; }
@@ -14,7 +15,16 @@ export class Board {
   readonly binY: number;
   readonly clearance: number;
 
-  constructor(readonly spec: BoardSpec = BOARD) {
+  /**
+   * The payout table is a parameter because the two modes do not share one:
+   * Physics-First pays from the Derived Table, which is the default here since
+   * it is the only mode that exists, and Outcome-First will pass the Reference
+   * Table unchanged. See docs/adr/0001-two-payout-tables-one-rtp-target.md.
+   */
+  constructor(
+    readonly spec: BoardSpec = BOARD,
+    readonly table: readonly number[] = DERIVED_TABLE,
+  ) {
     this.centerX = spec.width / 2;
     this.clearance = clearanceOf(spec);
 
@@ -50,7 +60,7 @@ export class Board {
         x: cx,
         left: cx - spec.spacingX / 2,
         right: cx + spec.spacingX / 2,
-        multiplier: REFERENCE_TABLE[i] ?? 1,
+        multiplier: this.table[i] ?? 1,
       });
     }
   }

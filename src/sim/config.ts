@@ -103,3 +103,20 @@ export const MAX_SPEED = maxSpeedOf(BOARD); // 1428 px/s
 export const REFERENCE_TABLE = [
   110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.3, 0.5, 1, 1.5, 3, 5, 10, 41, 110,
 ] as const;
+
+/**
+ * The distribution the Reference Table was designed against: `rows` fair
+ * left/right steps, as a probability per bin. This is the yardstick, not a
+ * description of our board — see src/sim/measured.ts for what the physics
+ * actually does.
+ */
+export function binomialPmf(rows: number): number[] {
+  const out: number[] = [];
+  let c = 1;
+  const total = 2 ** rows;
+  for (let k = 0; k <= rows; k++) {
+    out.push(c / total);
+    c = (c * (rows - k)) / (k + 1);
+  }
+  return out;
+}

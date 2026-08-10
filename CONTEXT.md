@@ -113,9 +113,14 @@ _Avoid_: stake table, standard table, real table
 
 **Derived Table**:
 A multiplier table solved so that it pays 98.99% against the
-[[Measured Distribution]] rather than against a binomial. Used by
-[[Physics-First Mode]]. Regenerated whenever the physics tuning changes — a
-tuning change silently invalidates it.
+[[Symmetrised Distribution]] rather than against a binomial. Used by
+[[Physics-First Mode]]. Solved per bin rather than scaled as a whole, so each
+bin returns what the same bin returns under [[Outcome-First Mode]]; the body is
+untouched and the tail carries the whole correction, printing 230x where the
+[[Reference Table]] prints 110x. Rounded to a printable grid, which costs
+0.0568 of a point: it pays 99.0468%, and that is the figure to quote. Computed
+from the committed distribution rather than committed separately, so it cannot
+go stale against it.
 _Avoid_: custom table, tuned table, fixed table
 
 ### Provably fair

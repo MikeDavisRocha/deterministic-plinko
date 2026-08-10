@@ -2,26 +2,14 @@ import { describe, expect, it } from "vitest";
 import { Board } from "../sim/Board";
 import { World } from "../sim/World";
 import { MAX_STEPS, monteCarlo } from "../sim/simulate";
-import { BOARD, DT, REFERENCE_TABLE } from "../sim/config";
+import { binomialPmf, BOARD, DT, REFERENCE_TABLE } from "../sim/config";
 
 const RUNS = 20_000;
-
-/** Binomial over `rows` fair left/right steps, as probabilities per bin. */
-function binomial(rows: number): number[] {
-  const out: number[] = [];
-  let c = 1;
-  const total = 2 ** rows;
-  for (let k = 0; k <= rows; k++) {
-    out.push(c / total);
-    c = (c * (rows - k)) / (k + 1);
-  }
-  return out;
-}
 
 const board = new Board();
 const { counts, unsettled } = monteCarlo(board, RUNS);
 const settled = RUNS - unsettled;
-const expected = binomial(BOARD.rows);
+const expected = binomialPmf(BOARD.rows);
 
 describe(`the measured distribution over ${RUNS} drops`, () => {
   it("settles every drop", () => {
