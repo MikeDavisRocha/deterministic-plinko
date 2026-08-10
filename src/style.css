@@ -84,6 +84,42 @@ button.primary { background: var(--accent); border-color: var(--accent); color: 
 button.primary:hover { color: var(--bg); opacity: 0.9; }
 button:disabled { opacity: 0.4; cursor: default; }
 
+/* Mode switch. The two modes are the project's whole argument, so the control
+   that swaps them sits at the top and reads as one object rather than two. */
+.seg { gap: 0; }
+.seg button { border-radius: 0; letter-spacing: 0; font-size: 11px; padding: 10px 4px; white-space: nowrap; }
+.seg button:first-child { border-radius: 6px 0 0 6px; }
+.seg button:last-child { border-radius: 0 6px 6px 0; border-left: none; }
+.seg button.on { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 500; }
+.seg button.on:hover { color: var(--bg); opacity: 0.9; }
+
+#physics-controls, #outcome-controls { display: flex; flex-direction: column; gap: 14px; }
+/* An id selector outranks the [hidden] attribute, so the rule above would keep
+   the inactive mode's fields on screen without this. */
+#physics-controls[hidden], #outcome-controls[hidden] { display: none; }
+
+.dim { color: var(--line); letter-spacing: 0; }
+
+/* The commitment and the revealed seed are 64 hex characters each. They wrap
+   rather than truncate: a hash a player cannot read in full is a hash they
+   cannot check. */
+.hash {
+  display: block;
+  padding: 8px 9px;
+  background: var(--bg);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text-hi);
+  font-size: 10px;
+  line-height: 1.5;
+  word-break: break-all;
+}
+
+.verdict { margin: 10px 0 0; color: var(--win); font-size: 11px; line-height: 1.5; }
+.verdict.bad { color: var(--lose); }
+
+#reveal-box { padding-top: 14px; }
+
 #histogram { border-top: 1px solid var(--line); padding-top: 12px; }
 #histogram canvas { display: block; width: 100%; }
 

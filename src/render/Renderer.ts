@@ -14,6 +14,7 @@ export class Renderer {
   private pegLayer = new Graphics();
   private flashLayer = new Graphics();
   private binLayer = new Graphics();
+  private binLabels = new Container();
   private liveTrail = new Graphics();
   private discG = new Graphics();
 
@@ -27,6 +28,9 @@ export class Renderer {
     private app: Application,
     private board: Board,
   ) {
+    // Geometry is shared by both modes; only the printed multipliers differ.
+    // That is why switching modes redraws the bins and leaves everything else
+    // — pegs, ghost texture, trail — exactly where it was.
     const root = new Container();
     app.stage.addChild(root);
 
@@ -38,10 +42,13 @@ export class Renderer {
     const ghostSprite = new Sprite(this.ghostTex);
     ghostSprite.alpha = 1;
 
-    root.addChild(ghostSprite, this.binLayer, this.pegLayer, this.flashLayer, this.liveTrail, this.discG);
+    root.addChild(
+      ghostSprite, this.binLayer, this.binLabels,
+      this.pegLayer, this.flashLayer, this.liveTrail, this.discG,
+    );
 
     this.drawPegsOnce();
-    this.drawBinsOnce(root);
+    this.drawBins();
 
     this.discG.circle(0, 0, this.board.spec.discRadius).fill({ color: PAL.accent });
     this.discG.visible = false;
@@ -54,10 +61,23 @@ export class Renderer {
     }
   }
 
-  private drawBinsOnce(root: Container) {
+  /**
+   * Point the renderer at another board. Both modes share a BoardSpec, so this
+   * is only ever a change of payout table — and seeing 110x become 230x at the
+   * edges when the mode switches is the clearest statement the project makes.
+   */
+  setBoard(board: Board) {
+    this.board = board;
+    this.drawBins();
+  }
+
+  private drawBins() {
     const y = this.board.binY;
     const style = (color: number) =>
       new TextStyle({ fontFamily: "JetBrains Mono", fontSize: 10, fill: color });
+
+    this.binLayer.clear();
+    this.binLabels.removeChildren().forEach((c) => c.destroy());
 
     for (const bin of this.board.bins) {
       const hot = bin.multiplier >= 3;
@@ -73,7 +93,7 @@ export class Renderer {
       label.anchor.set(0.5);
       label.x = bin.x;
       label.y = y + this.board.spec.binHeight / 2;
-      root.addChild(label);
+      this.binLabels.addChild(label);
     }
   }
 

@@ -1,19 +1,55 @@
+export type Mode = "physics" | "outcome";
+
 type Handlers = {
-  onDrop: (seed: number) => void;
+  onDrop: () => void;
   onReplay: () => void;
   onMonte: () => void;
+  onMode: (mode: Mode) => void;
+  /** A new client seed burns the session: new server seed, new commitment. */
+  onClientSeed: (value: string) => void;
+  onReveal: () => void;
 };
 
+const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+
+/**
+ * The panel. It owns which fields are visible, and nothing else — every button
+ * hands straight back to main.ts, because the two modes differ in what a drop
+ * *is* and that decision does not belong in the widget that starts one.
+ */
 export class Controls {
-  private seedInput = document.getElementById("seed") as HTMLInputElement;
-  private dropBtn = document.getElementById("drop") as HTMLButtonElement;
-  private replayBtn = document.getElementById("replay") as HTMLButtonElement;
-  private monteBtn = document.getElementById("monte") as HTMLButtonElement;
+  private seedInput = el<HTMLInputElement>("seed");
+  private clientInput = el<HTMLInputElement>("client-seed");
+  private physicsBox = el("physics-controls");
+  private outcomeBox = el("outcome-controls");
+  private revealBox = el("reveal-box");
+  private modeButtons: Record<Mode, HTMLButtonElement> = {
+    physics: el<HTMLButtonElement>("mode-physics"),
+    outcome: el<HTMLButtonElement>("mode-outcome"),
+  };
 
   constructor(h: Handlers) {
-    this.dropBtn.onclick = () => h.onDrop(this.seed);
-    this.replayBtn.onclick = () => h.onReplay();
-    this.monteBtn.onclick = () => h.onMonte();
+    el<HTMLButtonElement>("drop").onclick = () => h.onDrop();
+    el<HTMLButtonElement>("replay").onclick = () => h.onReplay();
+    el<HTMLButtonElement>("monte").onclick = () => h.onMonte();
+    el<HTMLButtonElement>("reveal").onclick = () => h.onReveal();
+
+    for (const mode of ["physics", "outcome"] as const) {
+      this.modeButtons[mode].onclick = () => h.onMode(mode);
+    }
+
+    this.clientInput.onchange = () => h.onClientSeed(this.clientSeed);
+  }
+
+  setMode(mode: Mode) {
+    for (const m of ["physics", "outcome"] as const) {
+      this.modeButtons[m].classList.toggle("on", m === mode);
+    }
+    this.physicsBox.hidden = mode !== "physics";
+    this.outcomeBox.hidden = mode !== "outcome";
+    for (const id of ["l-target", "r-target", "l-nonce", "r-nonce"]) {
+      el(id).hidden = mode !== "outcome";
+    }
   }
 
   get seed(): number {
@@ -25,8 +61,35 @@ export class Controls {
     this.seedInput.value = String(v);
   }
 
+  get clientSeed(): string {
+    return this.clientInput.value.trim() || "player-one";
+  }
+
+  /** Shown before the first drop of a session; the reveal is checked against it. */
+  showCommit(commit: string) {
+    el("commit").textContent = commit;
+    this.revealBox.hidden = true;
+  }
+
+  /**
+   * Close out a session: the commitment it was played under, the seed behind
+   * it, and whether one really hashes to the other. Called after the next
+   * session has already been armed, because showCommit hides this box.
+   */
+  showReveal(commit: string, serverSeed: string, drops: number, verified: boolean) {
+    el("revealed-commit").textContent = commit;
+    el("server-seed").textContent = serverSeed;
+    const verdict = el("verdict");
+    verdict.textContent = verified
+      ? `verified — sha-256 of this seed is the hash published before ` +
+        `${drops === 1 ? "that drop" : `those ${drops} drops`}`
+      : "MISMATCH — this seed is not the one that was committed to";
+    verdict.classList.toggle("bad", !verified);
+    this.revealBox.hidden = false;
+  }
+
   setReadout(id: string, value: string) {
-    const el = document.getElementById(`r-${id}`);
-    if (el) el.textContent = value;
+    const target = document.getElementById(`r-${id}`);
+    if (target) target.textContent = value;
   }
 }

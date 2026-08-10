@@ -12,10 +12,47 @@
     <main id="app">
       <div id="stage"></div>
       <aside id="panel">
-        <div class="field">
-          <label for="seed">seed</label>
-          <input id="seed" type="text" inputmode="numeric" value="1" />
+        <div id="modes" class="row seg">
+          <button id="mode-physics" class="on">physics-first</button>
+          <button id="mode-outcome">outcome-first</button>
         </div>
+
+        <!-- Physics-First: the seed decides the bin, so the player holds it. -->
+        <div id="physics-controls">
+          <div class="field">
+            <label for="seed">seed</label>
+            <input id="seed" type="text" inputmode="numeric" value="1" />
+          </div>
+        </div>
+
+        <!-- Outcome-First: the bin is decided before the disc moves, so what
+             the player holds is the client seed and the published commitment. -->
+        <div id="outcome-controls" hidden>
+          <div class="field">
+            <label for="client-seed">client seed</label>
+            <input id="client-seed" type="text" value="player-one" />
+          </div>
+          <div class="field">
+            <label>commitment <span class="dim">sha-256 of server seed</span></label>
+            <code id="commit" class="hash">—</code>
+          </div>
+          <!-- The revealed seed is worthless without the hash it is checked
+               against, so the closed session shows both side by side. The
+               field above has already moved on to the next session. -->
+          <div id="reveal-box" hidden>
+            <div class="field">
+              <label>closed session <span class="dim">was committed to</span></label>
+              <code id="revealed-commit" class="hash">—</code>
+            </div>
+            <div class="field">
+              <label>server seed <span class="dim">now revealed</span></label>
+              <code id="server-seed" class="hash">—</code>
+            </div>
+            <p id="verdict" class="verdict">—</p>
+          </div>
+          <button id="reveal">reveal &amp; verify</button>
+        </div>
+
         <div class="row">
           <button id="drop" class="primary">drop</button>
           <button id="replay">replay</button>
@@ -24,8 +61,12 @@
         <div id="histogram"></div>
         <dl id="readout">
           <dt>drops</dt><dd id="r-drops">0</dd>
+          <dt id="l-target" hidden>target bin</dt><dd id="r-target" hidden>—</dd>
           <dt>last bin</dt><dd id="r-bin">—</dd>
           <dt>payout</dt><dd id="r-payout">—</dd>
+          <dt id="l-nonce" hidden>nonce</dt><dd id="r-nonce" hidden>—</dd>
+          <dt>drop seed</dt><dd id="r-seed">—</dd>
+          <dt>rtp</dt><dd id="r-rtp">—</dd>
           <dt>tick</dt><dd id="r-tick">120 hz</dd>
           <dt>fps</dt><dd id="r-fps">—</dd>
         </dl>

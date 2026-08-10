@@ -120,3 +120,17 @@ export function binomialPmf(rows: number): number[] {
   }
   return out;
 }
+
+/**
+ * What Outcome-First Mode pays: exactly 64873/65536, or 98.9883%.
+ *
+ * A rational rather than a measurement, because that mode draws its bin from a
+ * binomial by construction (ADR 0005) and this table was designed against
+ * exactly that. Physics-First's counterpart, DERIVED_RTP, is a measured
+ * 99.0468% — and per ADR 0001 neither figure may be quoted without saying which
+ * mode and which distribution produced it.
+ */
+export const REFERENCE_RTP: number = REFERENCE_TABLE.reduce(
+  (sum, m, i) => sum + m * binomialPmf(BOARD.rows)[i],
+  0,
+);

@@ -151,7 +151,7 @@ describe("the Target Bin", () => {
    * added for exactly this.
    */
   it("indexes a bin on the Outcome-First board", () => {
-    const board = new Board(BOARD, REFERENCE_TABLE as unknown as number[]);
+    const board = new Board(BOARD, REFERENCE_TABLE);
     expect(board.bins.length).toBe(BOARD.rows + 1);
     for (let nonce = 0; nonce < 500; nonce++) {
       expect(board.bins[targetBinOf(seedsAt(nonce))]).toBeDefined();

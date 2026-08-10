@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { steerOf } from "../fair/steer";
 import { Board } from "../sim/Board";
-import { binomialPmf, BOARD, REFERENCE_TABLE } from "../sim/config";
+import { BOARD, REFERENCE_RTP, REFERENCE_TABLE } from "../sim/config";
 import { BIN_SEEDS, SEEDS_PER_BIN, UNSETTLED_SEEDS } from "../sim/measured";
 import { simulate } from "../sim/simulate";
 
@@ -10,7 +10,7 @@ const CLIENT = "player-one";
 const seedsAt = (nonce: number) => ({ serverSeed: SERVER, clientSeed: CLIENT, nonce });
 
 /** The board this mode plays: the Reference Table, unchanged, per ADR 0001. */
-const outcomeFirstBoard = () => new Board(BOARD, REFERENCE_TABLE as unknown as number[]);
+const outcomeFirstBoard = () => new Board(BOARD, REFERENCE_TABLE);
 
 describe("the Seed Index", () => {
   /**
@@ -137,9 +137,7 @@ describe("steering to the Target Bin", () => {
    * which is the contrast with Physics-First's measured 99.0468%.
    */
   it("pays the Reference Table's exact 98.99%", () => {
-    const binomial = binomialPmf(BOARD.rows);
-    const rtp = REFERENCE_TABLE.reduce((s, m, i) => s + m * binomial[i], 0);
-    expect(rtp).toBeCloseTo(64873 / 65536, 12);
-    expect(rtp).toBeCloseTo(0.9899, 4);
+    expect(REFERENCE_RTP).toBeCloseTo(64873 / 65536, 12);
+    expect(REFERENCE_RTP).toBeCloseTo(0.9899, 4);
   });
 });
