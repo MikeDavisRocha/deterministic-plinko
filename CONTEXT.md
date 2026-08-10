@@ -106,6 +106,16 @@ the seed sample rather than to the board. See
 docs/adr/0004-the-measured-lopsidedness-is-the-samples-not-the-boards.md.
 _Avoid_: smoothed distribution, folded distribution
 
+**Seed Index**:
+Per bin, the first 128 seeds under the [[Measured Distribution]]'s sample count
+that settle there. What [[Outcome-First Mode]] draws a trajectory from once the
+[[Commitment]] has named a [[Target Bin]] — steering is a lookup, so the solver
+runs the same drop it would have run in [[Physics-First Mode]]. Canonical
+rather than curated: "the first 128 seeds landing in bin k" is reproducible by
+anyone with the solver. Ships inside the same artefact as the counts, from the
+same run. See docs/adr/0006-outcome-first-steers-by-seed-index.md.
+_Avoid_: seed table, seed pool, lookup table
+
 **Reference Table**:
 The industry-standard 16-row medium-risk multiplier table. Pays exactly 98.99%
 against a true binomial. Used by [[Outcome-First Mode]] unchanged.

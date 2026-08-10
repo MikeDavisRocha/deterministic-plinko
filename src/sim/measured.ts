@@ -5,11 +5,13 @@ import {
 } from "./measured.data";
 
 export {
+  BIN_SEEDS,
   MEASURED_COUNTS,
   MEASURED_MEAN_FALL_SECONDS,
   MEASURED_SAMPLES,
   MEASURED_TUNING,
   MEASURED_UNSETTLED,
+  SEEDS_PER_BIN,
   UNSETTLED_SEEDS,
 } from "./measured.data";
 

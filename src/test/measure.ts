@@ -50,12 +50,29 @@ const SPOT_CHECK_RUNS = 20_000;
  */
 const MAX_RECORDED_SEEDS = 1000;
 
+/**
+ * How many seeds the Seed Index keeps per bin — the pool Outcome-First Mode
+ * draws a trajectory from once the commitment has named a Target Bin. See
+ * docs/adr/0006-outcome-first-steers-by-seed-index.md.
+ *
+ * "The first 128 seeds under MEASURED_SAMPLES that settle in bin k" is a
+ * canonical set: no choice is made here that a reader could not remake, which
+ * is the property that lets a player recompute the pool rather than trust it.
+ *
+ * 128 is what the rarest bin can afford. Bin 0 lands 700 times in 100 million,
+ * so it fills at around 18 million seeds and the pool costs nothing extra to
+ * collect; asking for 1024 would push the fill past the run itself.
+ */
+const SEEDS_PER_BIN = 128;
+
 interface ShardInput { readonly lo: number; readonly hi: number; }
 interface ShardResult {
   readonly counts: number[];
   readonly unsettled: number;
   /** Seeds that hit the step guard, up to MAX_RECORDED_SEEDS per shard. */
   readonly unsettledSeeds: number[];
+  /** The first SEEDS_PER_BIN seeds of this shard's slice, per bin. */
+  readonly binSeeds: number[][];
   /** Total simulated steps, for the mean fall time. */
   readonly steps: number;
 }
@@ -63,6 +80,7 @@ interface ShardResult {
 /** The settle loop, kept identical to `simulate()` but also reporting steps. */
 function run(board: Board, lo: number, hi: number, onProgress?: (done: number) => void): ShardResult {
   const counts = new Array<number>(board.bins.length).fill(0);
+  const binSeeds: number[][] = Array.from({ length: board.bins.length }, () => []);
   const unsettledSeeds: number[] = [];
   let unsettled = 0;
   let steps = 0;
@@ -75,12 +93,17 @@ function run(board: Board, lo: number, hi: number, onProgress?: (done: number) =
     if (w.binIndex < 0) {
       unsettled++;
       if (unsettledSeeds.length < MAX_RECORDED_SEEDS) unsettledSeeds.push(seed);
-    } else counts[w.binIndex]++;
+    } else {
+      counts[w.binIndex]++;
+      // Only a settled drop can enter the pool, which is how Outcome-First Mode
+      // is structurally incapable of picking one of the seeds that hang.
+      if (binSeeds[w.binIndex].length < SEEDS_PER_BIN) binSeeds[w.binIndex].push(seed);
+    }
 
     if (onProgress && (seed - lo + 1) % 250_000 === 0) onProgress(seed - lo + 1);
   }
 
-  return { counts, unsettled, unsettledSeeds, steps };
+  return { counts, unsettled, unsettledSeeds, binSeeds, steps };
 }
 
 if (!isMainThread) {
@@ -132,6 +155,7 @@ async function main(): Promise<void> {
   );
 
   const counts = new Array<number>(new Board().bins.length).fill(0);
+  const binSeeds: number[][] = Array.from({ length: counts.length }, () => []);
   const unsettledSeeds: number[] = [];
   let unsettled = 0;
   let steps = 0;
@@ -139,10 +163,18 @@ async function main(): Promise<void> {
     r.counts.forEach((c, i) => (counts[i] += c));
     unsettled += r.unsettled;
     unsettledSeeds.push(...r.unsettledSeeds);
+    r.binSeeds.forEach((s, i) => binSeeds[i].push(...s));
     steps += r.steps;
   }
   // Shards finish out of order; the seed list must not.
   unsettledSeeds.sort((a, b) => a - b);
+  // Each shard kept the first SEEDS_PER_BIN of its own slice, so sorting the
+  // union and cutting it back yields exactly the first SEEDS_PER_BIN of the
+  // whole run — the same list a single-threaded pass would have produced.
+  for (let i = 0; i < binSeeds.length; i++) {
+    binSeeds[i].sort((a, b) => a - b);
+    binSeeds[i].length = Math.min(binSeeds[i].length, SEEDS_PER_BIN);
+  }
 
   const spot = run(new Board(), 0, SPOT_CHECK_RUNS);
   const seconds = (performance.now() - t0) / 1000;
@@ -153,11 +185,13 @@ async function main(): Promise<void> {
   // Relative to the project root, not to import.meta.url — this file runs as a
   // bundle out of node_modules/.tmp, where ../sim/ is not the source tree.
   const out = resolve(process.cwd(), "src/sim/measured.data.ts");
-  writeFileSync(out, emit({ runs, counts, unsettled, unsettledSeeds, meanFall, spot }));
+  writeFileSync(out, emit({ runs, counts, unsettled, unsettledSeeds, binSeeds, meanFall, spot }));
 
   console.log(`  unsettled ${unsettled}, mean fall ${meanFall.toFixed(3)}s`);
   if (unsettledSeeds.length) console.log(`  never settled: seeds ${unsettledSeeds.join(", ")}`);
   console.log(`  reachable bins ${counts.filter((c) => c > 0).length}/${counts.length}`);
+  const thinnest = Math.min(...binSeeds.map((s) => s.length));
+  console.log(`  seed index ${thinnest}..${SEEDS_PER_BIN} per bin (want ${SEEDS_PER_BIN})`);
   for (let i = 0; i < counts.length; i++) {
     const p = counts[i] / settled;
     console.log(`  bin ${String(i).padStart(2)}  ${String(counts[i]).padStart(10)}  ${(p * 100).toFixed(5)}%`);
@@ -170,12 +204,27 @@ interface Emitted {
   counts: number[];
   unsettled: number;
   unsettledSeeds: number[];
+  binSeeds: number[][];
   meanFall: number;
   spot: ShardResult;
 }
 
-function emit({ runs, counts, unsettled, unsettledSeeds, meanFall, spot }: Emitted): string {
+function emit({ runs, counts, unsettled, unsettledSeeds, binSeeds, meanFall, spot }: Emitted): string {
   const list = (xs: readonly number[]) => `[\n  ${xs.join(",\n  ")},\n]`;
+
+  /** Eight to a line: 2 176 seeds one per line would bury the rest of the file. */
+  const grid = (xs: readonly number[], indent: string) => {
+    const lines: string[] = [];
+    for (let i = 0; i < xs.length; i += 8) {
+      lines.push(`${indent}  ${xs.slice(i, i + 8).join(", ")},`);
+    }
+    return `[\n${lines.join("\n")}\n${indent}]`;
+  };
+
+  const index = binSeeds
+    .map((seeds, i) => `  // bin ${i} — ${counts[i].toLocaleString("en-US")} hit${counts[i] === 1 ? "" : "s"} in the run\n  ${grid(seeds, "  ")},`)
+    .join("\n");
+
   return `/**
  * GENERATED by \`npm run measure\`. Do not edit by hand.
  *
@@ -224,5 +273,25 @@ export const MEASURED_COUNTS: readonly number[] = ${list(counts)};
 export const SPOT_CHECK_SAMPLES = ${SPOT_CHECK_RUNS};
 
 export const SPOT_CHECK_COUNTS: readonly number[] = ${list(spot.counts)};
+
+/** How many seeds the Seed Index holds per bin, where the run could fill it. */
+export const SEEDS_PER_BIN = ${SEEDS_PER_BIN};
+
+/**
+ * The Seed Index: the first ${SEEDS_PER_BIN} seeds under MEASURED_SAMPLES that settle in
+ * each bin. Outcome-First Mode draws a trajectory from here once the provably
+ * fair commitment has named a Target Bin — see
+ * docs/adr/0006-outcome-first-steers-by-seed-index.md.
+ *
+ * A canonical set rather than a chosen one: "the first ${SEEDS_PER_BIN} seeds that land in
+ * bin k" is reproducible by anyone with the solver, so a player can recompute
+ * this pool instead of trusting that it was assembled honestly.
+ *
+ * Every seed here settled. The three that hang are in UNSETTLED_SEEDS and
+ * cannot appear below, so a steered drop cannot draw one.
+ */
+export const BIN_SEEDS: readonly (readonly number[])[] = [
+${index}
+];
 `;
 }
