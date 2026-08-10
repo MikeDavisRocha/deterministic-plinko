@@ -1,0 +1,3 @@
+# Normalise to LF in the repository. A project whose whole claim is bit-exact
+# reproducibility should not have line endings vary by contributor platform.
+* text=auto eol=lf
