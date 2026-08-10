@@ -1,0 +1,132 @@
+# Deterministic Plinko
+
+![The board mid-session, ghost trails accumulating](docs/screenshot.jpg)
+
+A Plinko board simulated by a hand-written physics solver — no physics engine —
+built to put two things side by side: a physically honest simulation, and the
+outcome-first architecture real money games are actually required to use.
+
+Both modes run **the same solver, the same board and the same trajectories**.
+They differ in who decides the bin, and both land on the same return to player
+by opposite routes. That contrast is the point of the project.
+
+| | Physics-First | Outcome-First |
+|---|---|---|
+| Who decides the bin | the simulation | a provably fair commitment, before the disc moves |
+| Distribution | measured, not binomial | binomial by construction |
+| Payout table | Derived, solved against the measurement | the industry Reference Table, unchanged |
+| RTP | **99.0468%**, measured over 100 000 000 drops | **98.9883%** exactly — 64873/65536 |
+| Edge multiplier | 230x | 110x |
+
+Neither figure is quotable without saying which mode produced it. One is a
+measurement with a sample size behind it; the other is a rational number.
+
+## The interesting parts
+
+**A solver cannot be tuned to an RTP target.** Sweeping restitution 0.10–0.70
+and gravity 900–3000 produced measured RTPs from 42% to 2813%, because the
+outermost bins pay 110x and one drop in a thousand landing there moves RTP by
+eleven points. So RTP is fixed at the payout table instead: Outcome-First draws
+from a binomial and uses the industry table unchanged, while Physics-First keeps
+its honest distribution and pays from a table solved against *that*. The solve is
+contribution-preserving — `m[i] = reference[i] × binomial[i] / measured[i]` — so
+each bin returns what the same bin returns in the other mode, matching the
+volatility and not merely the total. It prints 230x where the industry prints
+110x, and that visible divergence is the result, not an embarrassment.
+
+**The distribution is measured, not assumed.** 100 million headless drops, 21
+minutes across 11 shards, committed as a build artefact with the sample count
+behind it — because the tail entries need far more samples than the body, and
+the Derived Table is only as good as its tail estimates. Bin 0 lands 700 times
+in 100 million: a 3.8% relative standard error, and the reason the run is that
+size. A fingerprint of every number that can move a trajectory ships with it, so
+changing gravity fails the suite with a regenerate-me message instead of quietly
+shipping a payout table solved against a board that no longer exists.
+
+**The measured lopsidedness turned out to be the sample's, not the board's.**
+The counts came out asymmetric at chi-square 26.5 on 8 df, p = 8.5e-4. Geometry
+rules out contact-ordering bias, and a drop has exactly one random input — spawn
+jitter — so on a mirror-image board the map from jitter to bin must be
+antisymmetric. It holds for 1 000 000 pairs without one exception. The
+asymmetry belongs to which jitters the PRNG hands out for sequential seeds, so
+the table is solved against the symmetrised counts, under a licence a test can
+revoke.
+
+**Provably fair, in the scheme players can actually check.** HMAC-SHA256 keyed
+with the server seed over `clientSeed:nonce:round`, bytes taken four at a time
+into floats, one float per row deciding left or right. Deliberately the industry
+construction rather than a tighter one of our own: a player verifies with a
+third-party verifier they already trust, and a scheme only this page can
+reproduce gives up the property it is named for. SHA-256 and HMAC are written
+out by hand — WebCrypto is async and the drop path is not — and checked against
+the published FIPS 180-4 and RFC 4231 vectors, including the longer-than-a-block
+key case that short seeds never reach.
+
+**Steering is a lookup, not an intervention.** The measurement run also records
+the first 128 seeds that settle in each bin; the commitment names a bin, then
+picks a seed from that bin's pool. The solver then runs exactly the drop it
+would have run in the other mode. Searching for a seed live was rejected on
+numbers: bin 0 is one drop in 65 536 under the commitment but one in ~143 000
+under the physics, so the search that costs nothing in the body costs ten
+seconds in the tail — and capping the attempts is precisely what a commitment
+forbids.
+
+**Bit-exact determinism.** The seeded PRNG is consumed once at spawn; `step()`
+is a pure function of the previous state. The same seed replays the same
+trajectory, verified by comparing 4-tuples of position and velocity with strict
+equality, and pinned by committed hashes of the raw float bit patterns — because
+two engines that disagree by one ULP print identical `toFixed(6)` and differ
+where it matters. `Math.hypot`, `Math.random` and `Date.now` are banned in the
+solver and in the fairness code, and a test reads the sources to enforce it.
+
+**Tunneling is handled by invariant, not brute force.** Rather than shrinking
+the timestep, velocity is clamped so `maxSpeed × dt < discRadius + pegRadius`
+always holds. At the shipped tuning the clamp never actually binds, so it is a
+guard rail rather than part of the physics.
+
+**Simulation decoupled from rendering.** Nothing under `src/sim/` imports Pixi,
+which is what makes the Monte Carlo trivial. On an AMD Ryzen 5 5500 under Node
+24: **10 000 physics drops in 531 ms** (53 µs each) and **10 000 commitment
+draws in 282 ms** (28 µs each).
+
+## Numbers worth knowing
+
+- 16 rows, 17 bins, mean fall 4.035 simulated seconds — a tuning target, not a
+  consequence
+- Physics is binomial through the body and not in the tail: bins 3–13 land
+  within 0.6% of binomial, the outermost pair at 0.46× and the next at 1.36×
+- 3 drops in 100 million never settle. They are named in the artefact and
+  replayable one by one; Outcome-First cannot draw them, because only settled
+  drops enter a seed pool
+- 103 tests, including all 2 176 indexed seeds re-simulated on every run to
+  confirm each lands in the bin it is filed under
+
+## Run it
+
+```bash
+npm install
+npm run dev
+```
+
+```bash
+npm test         # 103 tests
+npm run measure  # regenerate the distribution + seed index — 21 min, 11 shards
+npm run symmetry # sweep a million mirrored spawn pairs
+npm run golden   # print trajectory hashes, to compare across engines
+```
+
+## Decisions
+
+The reasoning lives in [`docs/adr/`](docs/adr), and the domain language in
+[`CONTEXT.md`](CONTEXT.md).
+
+1. [Two payout tables, one RTP target](docs/adr/0001-two-payout-tables-one-rtp-target.md)
+2. [No `Math.hypot` in the solver](docs/adr/0002-no-math-hypot-in-the-solver.md)
+3. [Lateral drag is what makes the walk binomial](docs/adr/0003-lateral-drag-is-what-makes-the-walk-binomial.md)
+4. [The measured lopsidedness is the sample's, not the board's](docs/adr/0004-the-measured-lopsidedness-is-the-samples-not-the-boards.md)
+5. [The Target Bin is drawn from the commitment](docs/adr/0005-the-target-bin-is-drawn-from-the-commitment.md)
+6. [Outcome-First steers by seed index](docs/adr/0006-outcome-first-steers-by-seed-index.md)
+
+## Stack
+
+Pixi.js v8 · TypeScript · Vite · Vitest
