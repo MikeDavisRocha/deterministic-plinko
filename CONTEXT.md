@@ -84,9 +84,9 @@ _Avoid_: physics mode, emergent mode, simulation mode
 
 **Outcome-First Mode**:
 The mode where the bin is decided before the disc moves, by a provably fair
-commitment, and the simulation is steered to land there. Its distribution is
-binomial by construction, so it uses the [[Reference Table]]. This is how real
-money Plinko is built.
+[[Commitment]], and the simulation is steered to land on that [[Target Bin]].
+Its distribution is binomial by construction, so it uses the
+[[Reference Table]]. This is how real money Plinko is built.
 _Avoid_: fair mode, casino mode, rigged mode, guided mode
 
 ### Payout tables
@@ -136,6 +136,20 @@ prove the operator could not have chosen the outcome alone.
 **Nonce**:
 The per-drop counter that makes each drop in a session distinct without
 changing either seed.
+
+**Commitment**:
+The SHA-256 of the [[Server Seed]], published before play. It fixes the seed
+without disclosing it, so revealing the seed afterwards proves the drops were
+decided by a value chosen before the player played.
+_Avoid_: hash, pledge, seed hash
+
+**Target Bin**:
+The bin [[Outcome-First Mode]] draws from the [[Commitment]] before the disc
+moves, and the bin the [[Drop]] is then steered into. Derived as the number of
+right steps in a 16-step walk read out of HMAC-SHA256, so it is binomial by
+construction. See
+docs/adr/0005-the-target-bin-is-drawn-from-the-commitment.md.
+_Avoid_: chosen bin, intended bin, predetermined bin
 
 ### The visual record
 

@@ -36,10 +36,12 @@ describe("the solver's engine-dependent-operation ban", () => {
 
   const sources = [
     ...readdirSync("src/sim").map((f) => join("src/sim", f)),
+    ...readdirSync("src/fair").map((f) => join("src/fair", f)),
     "src/core/Vec2.ts", // outside src/sim/, but World imports it
     "src/core/Rng.ts",
     "src/core/Loop.ts",
     "src/core/hash.ts", // decides whether a golden hash or a fingerprint matches
+    "src/core/sha256.ts", // decides the Target Bin a player is told to verify
   ];
 
   it.each(sources)("%s does not call Math.hypot", (file) => {
