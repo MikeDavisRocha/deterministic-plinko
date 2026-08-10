@@ -138,6 +138,14 @@ button.narrow { flex: 0 0 auto; padding-left: 12px; padding-right: 12px; letter-
 #readout dt { letter-spacing: 0.08em; }
 #readout dd { margin: 0; text-align: right; color: var(--text-hi); }
 
+/* Balance is the number the player actually watches, so it is allowed to be
+   bigger than everything around it. */
+#readout dd.big { font-size: 17px; color: var(--accent); line-height: 1.1; }
+
+/* Session accounting: present, checkable, and not competing with the game. */
+#readout.secondary { font-size: 11px; opacity: 0.75; }
+#readout.secondary dd { color: var(--text); }
+
 @media (max-width: 900px) {
   #app { flex-direction: column; padding: 12px; }
   #panel { width: 100%; }

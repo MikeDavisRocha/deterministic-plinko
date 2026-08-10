@@ -20,11 +20,38 @@ to player by opposite routes.
 | Who decides the bin | the simulation | a provably fair commitment, before the disc moves |
 | Distribution | measured, not binomial | binomial by construction |
 | Payout table | Derived, solved against the measurement | the industry Reference Table, unchanged |
-| RTP | **99.0468%**, measured over 100 000 000 drops | **98.9883%** exactly — 64873/65536 |
-| Edge multiplier | 230x | 110x |
+| RTP at medium risk | **99.0468%**, measured over 100 000 000 drops | **98.9883%** exactly — 64873/65536 |
+| Edge multiplier at medium | 230x | 110x |
 
-Neither figure is quotable without saying which mode produced it. One is a
-measurement with a sample size behind it; the other is a rational number.
+Neither figure is quotable without saying which mode and which risk produced
+it. One is a measurement with a sample size behind it; the other is a rational
+number.
+
+## The game
+
+You have a balance and you choose a bet, so the multiplier finally has
+something to act on. The one real decision a Plinko board offers is **risk** —
+low, medium and high all pay about 98.99% and differ only in where the money
+sits. Low never pays under 0.5x and tops out at 34x; high pays 0.2x across five
+middle bins to fund a 2100x edge. Same expected value, completely different
+ride.
+
+Both modes take the risk level, and Physics-First solves a separate table for
+each against the same measured distribution — three risks, one measurement, no
+regeneration, because the distribution does not depend on what the bins pay.
+
+The session prints what you wagered, what came back, and the ratio between them
+next to the target. Over a few hundred drops it visibly walks towards the figure
+above it, which is the most honest advertisement the mathematics has: you watch
+the RTP happen rather than being told it.
+
+Adding the second and third tables also exposed a bug worth naming. The
+rounding grid put everything from 1x to 10x on half-steps, which the medium
+table survives untouched because its body is already 1.5, 1, 0.5, 0.3. The low
+table lives entirely between 0.5x and 1.6x, so 1.1 and 1.2 both rounded to 1.0
+and **it paid 94.52% instead of 98.99%** — four and a half points lost to a
+rounding function, under a green test suite that had only ever seen one table.
+See [ADR 0007](docs/adr/0007-risk-is-a-choice-between-volatilities.md).
 
 ## The physics
 
@@ -152,7 +179,7 @@ draws in 282 ms** (28 µs each).
 - 3 drops in 100 million never settle. They are named in the artefact and
   replayable one by one; Outcome-First cannot draw them, because only settled
   drops enter a seed pool
-- 103 tests, including all 2 176 indexed seeds re-simulated on every run to
+- 108 tests, including all 2 176 indexed seeds re-simulated on every run to
   confirm each lands in the bin it is filed under
 
 ## Run it
@@ -163,7 +190,7 @@ npm run dev
 ```
 
 ```bash
-npm test         # 103 tests
+npm test         # 108 tests
 npm run measure  # regenerate the distribution + seed index — 21 min, 11 shards
 npm run symmetry # sweep a million mirrored spawn pairs
 npm run golden   # print trajectory hashes, to compare across engines
@@ -180,6 +207,7 @@ The reasoning lives in [`docs/adr/`](docs/adr), and the domain language in
 4. [The measured lopsidedness is the sample's, not the board's](docs/adr/0004-the-measured-lopsidedness-is-the-samples-not-the-boards.md)
 5. [The Target Bin is drawn from the commitment](docs/adr/0005-the-target-bin-is-drawn-from-the-commitment.md)
 6. [Outcome-First steers by seed index](docs/adr/0006-outcome-first-steers-by-seed-index.md)
+7. [Risk is a choice between volatilities, not between values](docs/adr/0007-risk-is-a-choice-between-volatilities.md)
 
 ## Stack
 

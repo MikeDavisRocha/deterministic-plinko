@@ -27,6 +27,20 @@
           <button id="mode-outcome">outcome-first</button>
         </div>
 
+        <div class="field">
+          <label>risk <span class="dim">same rtp</span></label>
+          <div id="risks" class="row seg">
+            <button id="risk-low">low</button>
+            <button id="risk-medium" class="on">medium</button>
+            <button id="risk-high">high</button>
+          </div>
+        </div>
+
+        <div class="field">
+          <label for="bet">bet</label>
+          <input id="bet" type="text" inputmode="decimal" value="1" />
+        </div>
+
         <!-- Physics-First: the seed decides the bin, so the player holds it. -->
         <div id="physics-controls">
           <div class="field">
@@ -73,16 +87,24 @@
         </div>
         <div id="histogram"></div>
         <dl id="readout">
-          <dt>drops</dt><dd id="r-drops">0</dd>
+          <dt>balance</dt><dd id="r-balance" class="big">1000.00</dd>
+          <dt>last win</dt><dd id="r-payout">—</dd>
           <dt id="l-target" hidden>target bin</dt><dd id="r-target" hidden>—</dd>
           <dt>last bin</dt><dd id="r-bin">—</dd>
-          <dt>payout</dt><dd id="r-payout">—</dd>
+          <dt>multiplier</dt><dd id="r-mult">—</dd>
           <dt id="l-nonce" hidden>nonce</dt><dd id="r-nonce" hidden>—</dd>
           <dt>drop seed</dt><dd id="r-seed">—</dd>
-          <dt>rtp</dt><dd id="r-rtp">—</dd>
+        </dl>
+        <dl id="readout" class="secondary">
+          <dt>drops</dt><dd id="r-drops">0</dd>
+          <dt>wagered</dt><dd id="r-wagered">0.00</dd>
+          <dt>returned</dt><dd id="r-returned">0.00</dd>
+          <dt>rtp so far</dt><dd id="r-actual">—</dd>
+          <dt>rtp target</dt><dd id="r-rtp">—</dd>
           <dt>tick</dt><dd id="r-tick">120 hz</dd>
           <dt>fps</dt><dd id="r-fps">—</dd>
         </dl>
+        <button id="reset">reset balance</button>
       </aside>
     </main>
     <script type="module" src="/src/main.ts"></script>

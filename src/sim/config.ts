@@ -94,15 +94,32 @@ export const maxSpeedOf = (b: BoardSpec) =>
 
 export const MAX_SPEED = maxSpeedOf(BOARD); // 1428 px/s
 
+/** The risk the player picks. The only real decision a Plinko board offers. */
+export type Risk = "low" | "medium" | "high";
+
+export const RISKS: readonly Risk[] = ["low", "medium", "high"];
+
 /**
- * The industry-standard 16-row medium-risk table. Pays exactly 98.99% against
- * a true binomial (64873 / 65536), so Outcome-First Mode uses it unchanged.
- * Physics-First Mode does NOT pay from this table — see the Derived Table and
- * docs/adr/0001-two-payout-tables-one-rtp-target.md.
+ * The industry-standard 16-row tables, one per risk level.
+ *
+ * All three pay about 98.99% against a true binomial and differ only in where
+ * the money sits: low never pays under 0.5x and tops out at 16x, high pays 0.2x
+ * across five middle bins to fund a 1000x edge. Same expected value, wildly
+ * different variance — which is what makes risk a decision rather than a
+ * preference, and the reason a Plinko board offers it at all.
+ *
+ * Outcome-First Mode uses these unchanged, because it draws from the binomial
+ * they were designed against. Physics-First Mode does NOT — see DERIVED_TABLES
+ * and docs/adr/0001-two-payout-tables-one-rtp-target.md.
  */
-export const REFERENCE_TABLE = [
-  110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.3, 0.5, 1, 1.5, 3, 5, 10, 41, 110,
-] as const;
+export const REFERENCE_TABLES: Record<Risk, readonly number[]> = {
+  low: [16, 9, 2, 1.4, 1.4, 1.2, 1.1, 1, 0.5, 1, 1.1, 1.2, 1.4, 1.4, 2, 9, 16],
+  medium: [110, 41, 10, 5, 3, 1.5, 1, 0.5, 0.3, 0.5, 1, 1.5, 3, 5, 10, 41, 110],
+  high: [1000, 130, 26, 9, 4, 2, 0.2, 0.2, 0.2, 0.2, 0.2, 2, 4, 9, 26, 130, 1000],
+};
+
+/** Medium is the default risk, and the table every ADR before 0007 refers to. */
+export const REFERENCE_TABLE = REFERENCE_TABLES.medium;
 
 /**
  * The distribution the Reference Table was designed against: `rows` fair
@@ -122,15 +139,19 @@ export function binomialPmf(rows: number): number[] {
 }
 
 /**
- * What Outcome-First Mode pays: exactly 64873/65536, or 98.9883%.
+ * What Outcome-First Mode pays, per risk: 99.0001%, 98.9883% and 98.9769%.
  *
- * A rational rather than a measurement, because that mode draws its bin from a
- * binomial by construction (ADR 0005) and this table was designed against
- * exactly that. Physics-First's counterpart, DERIVED_RTP, is a measured
- * 99.0468% — and per ADR 0001 neither figure may be quoted without saying which
- * mode and which distribution produced it.
+ * Rationals rather than measurements, because that mode draws its bin from a
+ * binomial by construction (ADR 0005) and these tables were designed against
+ * exactly that. Physics-First's counterparts in DERIVED_RTPS are measured — and
+ * per ADR 0001 no figure may be quoted without saying which mode, which risk
+ * and which distribution produced it.
  */
-export const REFERENCE_RTP: number = REFERENCE_TABLE.reduce(
-  (sum, m, i) => sum + m * binomialPmf(BOARD.rows)[i],
-  0,
-);
+export const REFERENCE_RTPS: Record<Risk, number> = (() => {
+  const binomial = binomialPmf(BOARD.rows);
+  const rtp = (table: readonly number[]) =>
+    table.reduce((sum, m, i) => sum + m * binomial[i], 0);
+  return { low: rtp(REFERENCE_TABLES.low), medium: rtp(REFERENCE_TABLES.medium), high: rtp(REFERENCE_TABLES.high) };
+})();
+
+export const REFERENCE_RTP: number = REFERENCE_RTPS.medium;

@@ -1,3 +1,5 @@
+import { Risk, RISKS } from "../sim/config";
+
 export type Mode = "physics" | "outcome";
 
 type Handlers = {
@@ -5,10 +7,12 @@ type Handlers = {
   onReplay: () => void;
   onMonte: () => void;
   onMode: (mode: Mode) => void;
+  onRisk: (risk: Risk) => void;
   /** A new client seed burns the session: new server seed, new commitment. */
   onClientSeed: (value: string) => void;
   onReveal: () => void;
   onMute: () => void;
+  onReset: () => void;
 };
 
 const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
@@ -20,6 +24,7 @@ const el = <T extends HTMLElement>(id: string) => document.getElementById(id) as
  */
 export class Controls {
   private seedInput = el<HTMLInputElement>("seed");
+  private betInput = el<HTMLInputElement>("bet");
   private clientInput = el<HTMLInputElement>("client-seed");
   private physicsBox = el("physics-controls");
   private outcomeBox = el("outcome-controls");
@@ -35,9 +40,13 @@ export class Controls {
     el<HTMLButtonElement>("monte").onclick = () => h.onMonte();
     el<HTMLButtonElement>("reveal").onclick = () => h.onReveal();
     el<HTMLButtonElement>("mute").onclick = () => h.onMute();
+    el<HTMLButtonElement>("reset").onclick = () => h.onReset();
 
     for (const mode of ["physics", "outcome"] as const) {
       this.modeButtons[mode].onclick = () => h.onMode(mode);
+    }
+    for (const risk of RISKS) {
+      el<HTMLButtonElement>(`risk-${risk}`).onclick = () => h.onRisk(risk);
     }
 
     this.clientInput.onchange = () => h.onClientSeed(this.clientSeed);
@@ -56,6 +65,21 @@ export class Controls {
 
   setMuted(muted: boolean) {
     el("mute").textContent = muted ? "sound: off" : "sound: on";
+  }
+
+  setRisk(risk: Risk) {
+    for (const r of RISKS) el(`risk-${r}`).classList.toggle("on", r === risk);
+  }
+
+  /** The bet, floored at nothing and never more than the player actually has. */
+  bet(balance: number): number {
+    const v = parseFloat(this.betInput.value);
+    if (!Number.isFinite(v) || v <= 0) return 0;
+    return Math.min(v, balance);
+  }
+
+  set betValue(v: number) {
+    this.betInput.value = v.toFixed(2);
   }
 
   get seed(): number {

@@ -7,8 +7,8 @@ import { steerOf } from "./fair/steer";
 import { Board } from "./sim/Board";
 import { World } from "./sim/World";
 import { monteCarlo } from "./sim/simulate";
-import { BOARD, DT, REFERENCE_RTP, REFERENCE_TABLE } from "./sim/config";
-import { DERIVED_RTP, DERIVED_TABLE } from "./sim/derived";
+import { BOARD, DT, REFERENCE_RTPS, REFERENCE_TABLES, Risk } from "./sim/config";
+import { DERIVED_RTPS, DERIVED_TABLES } from "./sim/derived";
 import { Renderer } from "./render/Renderer";
 import { Histogram } from "./render/Histogram";
 import { PAL } from "./render/palette";
@@ -45,31 +45,70 @@ async function boot() {
   document.getElementById("stage")!.appendChild(app.canvas);
 
   /**
-   * One board per mode, differing only in the payout table — the constructor
-   * parameter ADR 0001 added. Same spec, so the same geometry, the same solver
-   * and the same trajectories; what changes is what the bins are worth.
+   * One board per mode and risk, differing only in the payout table — the
+   * constructor parameter ADR 0001 added. Same spec throughout, so the same
+   * geometry, the same solver and the same trajectories; what changes is what
+   * the bins are worth. Built once because a Board lays out 152 pegs.
    */
-  const boards: Record<Mode, Board> = {
-    physics: new Board(BOARD, DERIVED_TABLE),
-    outcome: new Board(BOARD, REFERENCE_TABLE),
-  };
-  const rtp: Record<Mode, string> = {
-    physics: `${(DERIVED_RTP * 100).toFixed(4)}% measured`,
-    outcome: `${(REFERENCE_RTP * 100).toFixed(4)}% exact`,
+  const boards: Record<Mode, Record<Risk, Board>> = {
+    physics: {
+      low: new Board(BOARD, DERIVED_TABLES.low),
+      medium: new Board(BOARD, DERIVED_TABLES.medium),
+      high: new Board(BOARD, DERIVED_TABLES.high),
+    },
+    outcome: {
+      low: new Board(BOARD, REFERENCE_TABLES.low),
+      medium: new Board(BOARD, REFERENCE_TABLES.medium),
+      high: new Board(BOARD, REFERENCE_TABLES.high),
+    },
   };
 
   let mode: Mode = "physics";
-  const renderer = new Renderer(app, boards[mode]);
+  let risk: Risk = "medium";
+
+  const board = () => boards[mode][risk];
+  const rtpLabel = () =>
+    mode === "physics"
+      ? `${(DERIVED_RTPS[risk] * 100).toFixed(4)}% measured`
+      : `${(REFERENCE_RTPS[risk] * 100).toFixed(4)}% exact`;
+  const renderer = new Renderer(app, board());
   const histogram = new Histogram(document.getElementById("histogram")!);
   const loop = new Loop(DT);
 
   // Counted per mode: pooling them into one chart would average the honest
   // distribution with the drawn one and say nothing about either.
   const counts: Record<Mode, number[]> = {
-    physics: new Array(boards.physics.bins.length).fill(0),
-    outcome: new Array(boards.outcome.bins.length).fill(0),
+    physics: new Array(BOARD.rows + 1).fill(0),
+    outcome: new Array(BOARD.rows + 1).fill(0),
   };
   const drops: Record<Mode, number> = { physics: 0, outcome: 0 };
+
+  /**
+   * The wallet. Without it the whole project measures an RTP that nothing is
+   * ever paid against — CONTEXT.md defines Payout as `multiplier x bet`, and
+   * until now there was no bet for the multiplier to act on.
+   */
+  const START_BALANCE = 1000;
+  let balance = START_BALANCE;
+  let wagered = 0;
+  let returned = 0;
+  /** The stake riding on the drop in flight; settled against on landing. */
+  let stake = 0;
+
+  const money = (v: number) => v.toFixed(2);
+
+  const showWallet = () => {
+    controls.setReadout("balance", money(balance));
+    controls.setReadout("wagered", money(wagered));
+    controls.setReadout("returned", money(returned));
+    // The point of showing this: over a few hundred drops it walks towards the
+    // target above it, so the player watches the mathematics happen instead of
+    // being told about it.
+    controls.setReadout(
+      "actual",
+      wagered > 0 ? `${((returned / wagered) * 100).toFixed(2)}%` : "—",
+    );
+  };
 
   const sfx = new Sfx();
   sfx.muted = localStorage.getItem("plinko.muted") === "1";
@@ -94,9 +133,24 @@ async function boot() {
     controls.setReadout("nonce", "0");
   };
 
+  /**
+   * Take the stake before the disc moves. Returns false when the player cannot
+   * cover the bet, which is the one case a drop must not start — a round that
+   * pays out against money that was never risked is not a round.
+   */
+  const placeBet = (): boolean => {
+    const bet = controls.bet(balance);
+    if (bet <= 0) return false;
+    stake = bet;
+    balance -= bet;
+    wagered += bet;
+    showWallet();
+    return true;
+  };
+
   const spawn = (seed: number) => {
     lastSeed = seed;
-    world = new World(boards[mode], seed);
+    world = new World(board(), seed);
     counted = false;
     loop.reset();
     controls.setReadout("seed", String(seed));
@@ -123,39 +177,69 @@ async function boot() {
     spawn(draw.seed);
   };
 
-  const setMode = (next: Mode) => {
-    if (next === mode) return;
-    mode = next;
+  /** Shared by the mode and risk switches: both change what the bins pay. */
+  const rebind = (resetTrail: boolean) => {
     world = null;
     targetBin = -1;
-    renderer.setBoard(boards[mode]);
-    renderer.resetTrail();
-    controls.setMode(mode);
-    controls.setReadout("drops", String(drops[mode]));
-    controls.setReadout("rtp", rtp[mode]);
+    renderer.setBoard(board());
+    if (resetTrail) renderer.resetTrail();
+    controls.setReadout("rtp", rtpLabel());
     controls.setReadout("bin", "—");
+    controls.setReadout("mult", "—");
     controls.setReadout("payout", "—");
     controls.setReadout("target", "—");
     controls.setReadout("seed", "—");
+  };
+
+  const setMode = (next: Mode) => {
+    if (next === mode) return;
+    mode = next;
+    controls.setMode(mode);
+    controls.setReadout("drops", String(drops[mode]));
+    rebind(true);
     histogram.draw(counts[mode], BOARD.rows);
+  };
+
+  // Risk keeps the trail: the board and every trajectory on it are unchanged,
+  // and only the numbers printed under the bins move.
+  const setRisk = (next: Risk) => {
+    if (next === risk) return;
+    risk = next;
+    controls.setRisk(risk);
+    rebind(false);
   };
 
   const controls = new Controls({
     // In Physics-First, typing a seed and pressing drop plays THAT seed;
     // pressing drop again without editing the box draws a fresh one. UI-only
     // randomness — consumed here, never reaching step().
-    onDrop: () =>
-      mode === "physics"
-        ? dropPhysics(
-            controls.seed === lastSeed ? Math.floor(Math.random() * 1e9) : controls.seed,
-          )
-        : dropOutcome(),
+    onDrop: () => {
+      if (!placeBet()) return;
+      if (mode === "physics") {
+        dropPhysics(controls.seed === lastSeed ? Math.floor(Math.random() * 1e9) : controls.seed);
+      } else {
+        dropOutcome();
+      }
+    },
 
     // Replaying a drop must not advance the nonce: the same commitment has to
-    // produce the same drop, or the word means nothing.
-    onReplay: () => (mode === "physics" ? dropPhysics(lastSeed) : dropOutcome(lastNonce)),
+    // produce the same drop, or the word means nothing. It is still a paid
+    // round — the trajectory repeats, the stake does not come free.
+    onReplay: () => {
+      if (!placeBet()) return;
+      if (mode === "physics") dropPhysics(lastSeed);
+      else dropOutcome(lastNonce);
+    },
 
     onMode: setMode,
+    onRisk: setRisk,
+
+    onReset: () => {
+      balance = START_BALANCE;
+      wagered = 0;
+      returned = 0;
+      showWallet();
+    },
 
     onMute: () => {
       sfx.muted = !sfx.muted;
@@ -181,7 +265,7 @@ async function boot() {
     onMonte: () => {
       const t0 = performance.now();
       if (mode === "physics") {
-        const { counts: hist, unsettled } = monteCarlo(boards.physics, MONTE_RUNS);
+        const { counts: hist, unsettled } = monteCarlo(board(), MONTE_RUNS);
         histogram.draw(hist, BOARD.rows);
         console.log(
           `${MONTE_RUNS} physics drops in ${(performance.now() - t0).toFixed(1)} ms` +
@@ -191,7 +275,7 @@ async function boot() {
         // The commitment's own distribution, not the solver's. This is the
         // claim ADR 0005 rests on, drawn rather than measured: the bars land on
         // the binomial curve because they were drawn from it.
-        const hist = new Array(boards.outcome.bins.length).fill(0);
+        const hist = new Array(BOARD.rows + 1).fill(0);
         for (let nonce = 0; nonce < MONTE_RUNS; nonce++) {
           hist[steerOf(session.seedsAt(nonce)).targetBin]++;
         }
@@ -221,12 +305,22 @@ async function boot() {
       counted = true;
       sfx.settle(world.multiplier);
       renderer.celebrate(world.binIndex, world.multiplier);
+
+      // Payout is multiplier x bet, which is what CONTEXT.md has said a payout
+      // is since the first commit. The multiplier is reported beside it rather
+      // than in place of it — they are different quantities.
+      const payout = world.multiplier * stake;
+      balance += payout;
+      returned += payout;
+
       drops[mode]++;
       counts[mode][world.binIndex]++;
       histogram.draw(counts[mode], BOARD.rows);
+      showWallet();
       controls.setReadout("drops", String(drops[mode]));
       controls.setReadout("bin", String(world.binIndex));
-      controls.setReadout("payout", `${world.multiplier}x`);
+      controls.setReadout("mult", `${world.multiplier}x`);
+      controls.setReadout("payout", money(payout));
 
       // The one thing Outcome-First is not allowed to get wrong: the disc has
       // to land where the commitment said before it moved. Loud rather than
@@ -248,8 +342,13 @@ async function boot() {
 
   startSession();
   controls.setMode(mode);
+  controls.setRisk(risk);
   controls.setMuted(sfx.muted);
-  controls.setReadout("rtp", rtp[mode]);
+  controls.setReadout("rtp", rtpLabel());
+  showWallet();
+  // The boot drop is free: nothing has been staked yet and the player has not
+  // asked for anything, so it shows the board working without touching the
+  // balance.
   dropPhysics(1);
 }
 

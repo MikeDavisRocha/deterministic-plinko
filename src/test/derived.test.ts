@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { binomialPmf, BOARD, REFERENCE_TABLE } from "../sim/config";
-import { DERIVED_EXACT, DERIVED_RTP, DERIVED_TABLE, roundMultiplier } from "../sim/derived";
+import {
+  binomialPmf, BOARD, REFERENCE_RTPS, REFERENCE_TABLE, REFERENCE_TABLES, RISKS,
+} from "../sim/config";
+import {
+  DERIVED_EXACT, DERIVED_RTP, DERIVED_RTPS, DERIVED_TABLE, DERIVED_TABLES,
+  derivedExactFor, roundMultiplier,
+} from "../sim/derived";
 import { MEASURED, MEASURED_SYMMETRIC, rtpOf } from "../sim/measured";
 
 const TARGET = 0.9899;
@@ -80,5 +85,60 @@ describe("the Derived Table", () => {
     for (let i = 0; i < DERIVED_TABLE.length; i++) {
       expect(MEASURED[i]).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("every risk level", () => {
+  it("is exactly the rounded solve", () => {
+    for (const risk of RISKS) {
+      expect(DERIVED_TABLES[risk]).toEqual(
+        derivedExactFor(REFERENCE_TABLES[risk]).map(roundMultiplier),
+      );
+    }
+  });
+
+  it("is symmetric and covers every bin", () => {
+    for (const risk of RISKS) {
+      expect(DERIVED_TABLES[risk]).toEqual([...DERIVED_TABLES[risk]].reverse());
+      expect(REFERENCE_TABLES[risk]).toEqual([...REFERENCE_TABLES[risk]].reverse());
+      expect(DERIVED_TABLES[risk].length).toBe(BOARD.rows + 1);
+      expect(REFERENCE_TABLES[risk].length).toBe(BOARD.rows + 1);
+    }
+  });
+
+  /**
+   * The promise risk makes to a player: pick any of the three and you are
+   * playing the same game for the same money. If a level drifted off the
+   * target it would be quietly the wrong bet to take, which is precisely what
+   * a risk selector must never be.
+   */
+  it("pays the same RTP as the others, in both modes", () => {
+    for (const risk of RISKS) {
+      expect(Math.abs(REFERENCE_RTPS[risk] - TARGET)).toBeLessThan(0.002);
+      expect(Math.abs(DERIVED_RTPS[risk] - TARGET)).toBeLessThan(0.002);
+    }
+  });
+
+  /**
+   * Rounding is where a risk level can silently lose money, and low is where it
+   * nearly did: its whole table lives between 0.5x and 1.6x, so the half-step
+   * grid that medium is comfortable on rounded 1.1 and 1.2 both to 1.0 and paid
+   * 94.52%. Pinned tightly, because 4.5 points hid behind a passing suite until
+   * a second table existed to expose it. See ADR 0007.
+   */
+  it("survives rounding, low included", () => {
+    expect(DERIVED_RTPS.low).toBeCloseTo(0.989658, 6);
+    expect(DERIVED_RTPS.medium).toBeCloseTo(0.990468, 6);
+    expect(DERIVED_RTPS.high).toBeCloseTo(0.990420, 6);
+  });
+
+  /** Same expected value, different variance — that is the whole point. */
+  it("orders the three by volatility, not by value", () => {
+    const spread = (t: readonly number[]) => Math.max(...t) / Math.min(...t);
+    expect(spread(DERIVED_TABLES.low)).toBeLessThan(spread(DERIVED_TABLES.medium));
+    expect(spread(DERIVED_TABLES.medium)).toBeLessThan(spread(DERIVED_TABLES.high));
+    // Low never takes more than half a stake back on its worst bin; high does.
+    expect(Math.min(...DERIVED_TABLES.low)).toBe(0.5);
+    expect(Math.min(...DERIVED_TABLES.high)).toBe(0.2);
   });
 });
