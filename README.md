@@ -1,5 +1,7 @@
 # Deterministic Plinko
 
+**[Play it →](https://mikedavisrocha.github.io/deterministic-plinko/)**
+
 ![The board mid-session, ghost trails accumulating](docs/screenshot.jpg)
 
 A Plinko board simulated by a hand-written physics solver — no physics engine —

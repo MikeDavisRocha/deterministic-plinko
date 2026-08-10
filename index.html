@@ -4,6 +4,16 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>Deterministic Plinko</title>
+    <!-- Inline, so it costs no request: without it the browser asks the origin
+         root for /favicon.ico and takes a 404 on every load. -->
+    <link
+      rel="icon"
+      href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230b0f14'/><circle cx='10' cy='10' r='2.5' fill='%232a3441'/><circle cx='22' cy='10' r='2.5' fill='%232a3441'/><circle cx='16' cy='17' r='2.5' fill='%232a3441'/><circle cx='16' cy='25' r='4.5' fill='%23f5a524'/></svg>"
+    />
+    <meta
+      name="description"
+      content="A Plinko board on a hand-written physics solver: an honest simulation and a provably fair outcome-first mode, side by side, reaching the same RTP by opposite routes."
+    />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
