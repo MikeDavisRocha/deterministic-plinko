@@ -21,9 +21,10 @@ export function trajectory(seed: number): number[] {
 export const trajectoryHash = (seed: number) => hashFloats(trajectory(seed));
 
 /**
- * Committed under V8 (node 24.12.0). Any engine that reproduces the physics
- * bit for bit must print the same string — run `npm run golden` under bun,
- * Safari or a browser console to check a second engine.
+ * Committed under V8 (node 24.12.0), and confirmed identical under SpiderMonkey
+ * and JavaScriptCore — `npm run cross-engine` computes them inside all three
+ * and CI runs it on every push. `npm run golden` prints them for whatever
+ * engine you point at it by hand.
  *
  * A change here means the trajectory moved. That is either a deliberate tuning
  * change, in which case update these AND regenerate the Derived Table per

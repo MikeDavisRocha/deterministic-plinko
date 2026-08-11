@@ -16,6 +16,13 @@ Chrome does not reproduce in Safari. Both engines agree bit-for-bit on
 - This reads like a pointless de-optimisation, so it needs the guard rail: a
   committed golden hash of a reference trajectory, checked under both V8 and
   JavaScriptCore, fails the moment someone "tidies" it back to `Math.hypot`.
+- **That guard rail is now built, and the claim is confirmed rather than
+  argued.** `npm run cross-engine` computes the committed trajectory hashes
+  inside three engines — V8 via Chromium as a control, SpiderMonkey via Firefox,
+  and JavaScriptCore via WebKit — and all three reproduce them bit for bit. CI
+  runs it on every push. Until this existed the project asserted engine
+  independence on the strength of the `hypot` measurement alone; now something
+  fails if it stops being true.
 - It is also, incidentally, the larger half of a 28x speed-up in the headless
   Monte Carlo — V8's compensated `hypot` is far slower than a raw `sqrt`.
 - A same-engine determinism test cannot catch this class of bug. It passes under
