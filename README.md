@@ -178,9 +178,9 @@ float bit patterns — because two engines that disagree by one ULP print
 identical `toFixed(6)` and differ where it matters.
 
 Node and Chrome are both V8, so passing the suite twice proves nothing about
-that. `npm run cross-engine` recomputes the committed hashes inside Chromium,
-Firefox and WebKit — V8, SpiderMonkey and JavaScriptCore — and all three
-reproduce them bit for bit. CI runs it on every push. `Math.hypot`,
+that. `npm run cross-engine` recomputes the committed hashes — three seeds on
+each of the three boards — inside Chromium, Firefox and WebKit, which is V8,
+SpiderMonkey and JavaScriptCore, and all three reproduce all nine bit for bit. CI runs it on every push. `Math.hypot`,
 `Math.random` and `Date.now` are banned in the solver and in the fairness code,
 and a test reads the sources to enforce it.
 
