@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="./assets/index-BGBP68yr.js"></script>
+    <script type="module" crossorigin src="./assets/index-BwaNowFA.js"></script>
     <link rel="stylesheet" crossorigin href="./assets/index-DaeNuiqx.css">
   </head>
   <body>
@@ -27,6 +27,17 @@
         <div id="modes" class="row seg">
           <button id="mode-physics" class="on">physics-first</button>
           <button id="mode-outcome">outcome-first</button>
+        </div>
+
+        <!-- Each row count is its own board, its own 100-million drop
+             measurement and its own solved tables. See ADR 0008. -->
+        <div class="field">
+          <label>rows <span class="dim">own board</span></label>
+          <div id="rows" class="row seg">
+            <button id="rows-8">8</button>
+            <button id="rows-12">12</button>
+            <button id="rows-16" class="on">16</button>
+          </div>
         </div>
 
         <div class="field">
@@ -103,6 +114,7 @@
           <dt>returned</dt><dd id="r-returned">0.00</dd>
           <dt>rtp so far</dt><dd id="r-actual">—</dd>
           <dt>rtp target</dt><dd id="r-rtp">—</dd>
+          <dt>board</dt><dd id="r-rows">16</dd>
           <dt>tick</dt><dd id="r-tick">120 hz</dd>
           <dt>fps</dt><dd id="r-fps">—</dd>
         </dl>
