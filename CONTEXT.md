@@ -1,9 +1,11 @@
 # Deterministic Plinko
 
-A Plinko board simulated by a hand-written physics solver, built as a portfolio
-piece aimed at iGaming work. It exists to demonstrate two things side by side:
-a physically honest simulation, and the outcome-first architecture that real
-money games are actually required to use.
+A Plinko board simulated by a hand-written physics solver — no physics engine.
+It exists to put two things side by side: a physically honest simulation, and
+the outcome-first architecture real money games are required to use. Plinko is
+the subject because it makes that contrast concrete, not because the project is
+about gambling; the transferable part is a solver whose behaviour was measured
+rather than assumed, and a payout model solved against the measurement.
 
 ## Language
 
