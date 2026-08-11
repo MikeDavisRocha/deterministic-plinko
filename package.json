@@ -12,6 +12,7 @@
     "test": "vitest run",
     "golden": "esbuild src/test/print-golden.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/golden.mjs --log-level=warning && node node_modules/.tmp/golden.mjs",
     "measure": "esbuild src/test/measure.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/measure.mjs --log-level=warning && node node_modules/.tmp/measure.mjs",
+    "derived": "esbuild src/test/print-derived.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/derived.mjs --log-level=warning && node node_modules/.tmp/derived.mjs",
     "symmetry": "esbuild src/test/print-symmetry.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/symmetry.mjs --log-level=warning && node node_modules/.tmp/symmetry.mjs",
     "cross-engine": "node scripts/cross-engine.mjs"
   },

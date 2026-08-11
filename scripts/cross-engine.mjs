@@ -50,18 +50,19 @@ for (const { engine, via, launcher, control } of ENGINES) {
   const page = await browser.newPage();
   await page.setContent("<!doctype html><title>cross-engine</title>");
   await page.addScriptTag({ content: code });
-  const rows = await page.evaluate(() => globalThis.__crossEngine());
+  const results = await page.evaluate(() => globalThis.__crossEngine());
   await browser.close();
 
-  const bad = rows.filter((r) => r.got !== r.want);
+  const bad = results.filter((r) => r.got !== r.want);
   if (bad.length) failed = true;
 
   const label = `${engine} (${via})${control ? " [control]" : ""}`;
   console.log(`\n${label}`);
-  for (const { seed, got, want } of rows) {
+  for (const { rows, seed, got, want } of results) {
     const ok = got === want;
     console.log(
-      `  seed ${String(seed).padStart(6)}  ${got}  ${ok ? "matches" : `EXPECTED ${want}`}`,
+      `  ${String(rows).padStart(2)} rows  seed ${String(seed).padStart(6)}  ${got}  ` +
+      `${ok ? "matches" : `EXPECTED ${want}`}`,
     );
   }
 }

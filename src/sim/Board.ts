@@ -1,5 +1,4 @@
 import { BOARD, BoardSpec, clearanceOf } from "./config";
-import { DERIVED_TABLE } from "./derived";
 
 export interface Peg { x: number; y: number; r: number; }
 export interface Bin { x: number; left: number; right: number; multiplier: number; }
@@ -17,13 +16,22 @@ export class Board {
 
   /**
    * The payout table is a parameter because the two modes do not share one:
-   * Physics-First pays from the Derived Table, which is the default here since
-   * it is the only mode that exists, and Outcome-First will pass the Reference
-   * Table unchanged. See docs/adr/0001-two-payout-tables-one-rtp-target.md.
+   * Physics-First pays from the Derived Table and Outcome-First passes the
+   * Reference Table unchanged. See
+   * docs/adr/0001-two-payout-tables-one-rtp-target.md.
+   *
+   * It defaults to nothing at all — every bin pays 1x — rather than to the
+   * Derived Table, and that is a dependency decision rather than a taste one.
+   * The Derived Table is solved from a generated artefact, so defaulting to it
+   * would make everything that touches a Board depend on a measurement,
+   * *including `npm run measure` itself*: adding a row count would then require
+   * the measurement of that row count to already exist. A Board with no table
+   * is a board being used for its physics, which is exactly what the harness
+   * wants.
    */
   constructor(
     readonly spec: BoardSpec = BOARD,
-    readonly table: readonly number[] = DERIVED_TABLE,
+    readonly table: readonly number[] = [],
   ) {
     this.centerX = spec.width / 2;
     this.clearance = clearanceOf(spec);

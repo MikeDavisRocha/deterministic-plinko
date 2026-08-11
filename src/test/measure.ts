@@ -1,15 +1,16 @@
 /**
- * Generates the Measured Distribution artefact: `src/sim/measured.data.ts`.
+ * Generates the Measured Distribution artefacts: `src/sim/measured.<rows>.data.ts`.
  *
- *   npm run measure              -- at the committed sample count
- *   npm run measure -- 1000000   -- at a smaller one, for a quick look
+ *   npm run measure                 -- every shipped board, in sequence
+ *   npm run measure -- 12           -- one board, at the committed sample count
+ *   npm run measure -- 12 1000000   -- one board at a smaller one, for a look
  *
  * The run is sharded across worker threads by seed range. That is safe because
  * drop `s` depends on nothing but `s`: the shards compute disjoint slices of
  * exactly the sequence a single-threaded run would produce, so the artefact is
  * reproducible on any core count.
  *
- * Why this is a committed artefact and not a test fixture: the Derived Table is
+ * Why these are committed artefacts and not test fixtures: the Derived Table is
  * solved against these probabilities (ADR 0001), and the tail entries need far
  * more samples than the body to be worth anything. A run this size does not
  * belong in `npm test`, so the numbers are committed and `measured.test.ts`
@@ -22,19 +23,26 @@ import { fileURLToPath } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { Board } from "../sim/Board";
 import { World } from "../sim/World";
-import { BOARD, DT } from "../sim/config";
+import { BOARDS, DT, Rows, ROW_COUNTS } from "../sim/config";
 import { MAX_STEPS } from "../sim/simulate";
-import { TUNING_FINGERPRINT } from "../sim/fingerprint";
+import { FINGERPRINTS } from "../sim/fingerprint";
 
 /**
- * 100 million, which is ~18 minutes on 11 shards at ~95k drops/s.
+ * 100 million, which is ~18 minutes on 11 shards at ~95k drops/s at 16 rows,
+ * and less on the shorter boards because a shorter fall is fewer steps.
  *
- * The count is set by the rarest bin, not by the body. Bin 0 measures 7.0e-6 —
- * well under its binomial 1.5e-5 — so it lands 700 times at this sample size,
- * a 3.8% relative standard error. The same figure would be 5.3% at 50 million,
- * 12% at 10 million and 38% at 1 million. The Derived Table solves one
- * multiplier per bin, so that error lands straight in a printed payout: 3.8% on
- * bin 0 is smaller than the rounding the multiplier gets anyway, and 12% is not.
+ * The count is set by the rarest bin of the widest board, not by the body. At
+ * 16 rows bin 0 measures 7.0e-6 — well under its binomial 1.5e-5 — so it lands
+ * 700 times at this sample size, a 3.8% relative standard error. The same
+ * figure would be 5.3% at 50 million, 12% at 10 million and 38% at 1 million.
+ * The Derived Table solves one multiplier per bin, so that error lands straight
+ * in a printed payout: 3.8% on bin 0 is smaller than the rounding the
+ * multiplier gets anyway, and 12% is not.
+ *
+ * The smaller boards keep the same count rather than a cheaper one tuned to
+ * their own tails. It costs a few minutes and buys that the three artefacts are
+ * the same measurement at three widths — nothing about a comparison between
+ * them has to account for one of them having been sampled harder.
  */
 const DEFAULT_RUNS = 100_000_000;
 
@@ -59,13 +67,14 @@ const MAX_RECORDED_SEEDS = 1000;
  * canonical set: no choice is made here that a reader could not remake, which
  * is the property that lets a player recompute the pool rather than trust it.
  *
- * 128 is what the rarest bin can afford. Bin 0 lands 700 times in 100 million,
- * so it fills at around 18 million seeds and the pool costs nothing extra to
- * collect; asking for 1024 would push the fill past the run itself.
+ * 128 is what the rarest bin can afford. At 16 rows bin 0 lands 700 times in
+ * 100 million, so it fills at around 18 million seeds and the pool costs
+ * nothing extra to collect; asking for 1024 would push the fill past the run
+ * itself. The narrower boards fill every pool almost immediately.
  */
 const SEEDS_PER_BIN = 128;
 
-interface ShardInput { readonly lo: number; readonly hi: number; }
+interface ShardInput { readonly lo: number; readonly hi: number; readonly rows: Rows; }
 interface ShardResult {
   readonly counts: number[];
   readonly unsettled: number;
@@ -107,27 +116,57 @@ function run(board: Board, lo: number, hi: number, onProgress?: (done: number) =
 }
 
 if (!isMainThread) {
-  const { lo, hi } = workerData as ShardInput;
-  const result = run(new Board(), lo, hi, (done) => parentPort!.postMessage({ progress: done }));
+  const { lo, hi, rows } = workerData as ShardInput;
+  const result = run(new Board(BOARDS[rows]), lo, hi, (done) =>
+    parentPort!.postMessage({ progress: done }),
+  );
   parentPort!.postMessage({ result });
 } else {
   await main();
 }
 
 async function main(): Promise<void> {
-  const runs = Number(process.argv[2] ?? DEFAULT_RUNS);
+  const [rowsArg, runsArg] = process.argv.slice(2);
+
+  const boards = rowsArg === undefined ? [...ROW_COUNTS] : [Number(rowsArg) as Rows];
+  for (const rows of boards) {
+    if (!ROW_COUNTS.includes(rows)) {
+      console.error(
+        `no board at ${rowsArg} rows — the shipped ones are ${ROW_COUNTS.join(", ")}. ` +
+        `Adding one means adding it to BOARDS in src/sim/config.ts first.`,
+      );
+      process.exitCode = 1;
+      return;
+    }
+  }
+
+  const runs = Number(runsArg ?? DEFAULT_RUNS);
   if (!Number.isInteger(runs) || runs <= 0) {
-    console.error(`bad run count: ${process.argv[2]}`);
+    console.error(`bad run count: ${runsArg}`);
     process.exitCode = 1;
     return;
   }
+
+  for (const rows of boards) await measureBoard(rows, runs);
+
+  console.log(
+    `\nwrote ${boards.map((r) => `src/sim/measured.${r}.data.ts`).join(", ")} — ` +
+    `commit them, and regenerate the Derived Tables (ADR 0001).`,
+  );
+}
+
+async function measureBoard(rows: Rows, runs: number): Promise<void> {
+  const spec = BOARDS[rows];
 
   // Leave a core for the OS so the machine stays usable during a long run.
   const shards = Math.max(1, Math.min(cpus().length - 1, 16));
   const perShard = Math.ceil(runs / shards);
   const t0 = performance.now();
 
-  console.log(`measuring ${runs.toLocaleString("en-US")} drops across ${shards} shards, tuning ${TUNING_FINGERPRINT}`);
+  console.log(
+    `\nmeasuring ${runs.toLocaleString("en-US")} drops on the ${rows}-row board ` +
+    `across ${shards} shards, tuning ${FINGERPRINTS[rows]}`,
+  );
 
   const done = new Array<number>(shards).fill(0);
   const report = () => {
@@ -144,7 +183,7 @@ async function main(): Promise<void> {
       const lo = i * perShard;
       const hi = Math.min(lo + perShard, runs);
       return new Promise<ShardResult>((resolve, reject) => {
-        const worker = new Worker(fileURLToPath(import.meta.url), { workerData: { lo, hi } });
+        const worker = new Worker(fileURLToPath(import.meta.url), { workerData: { lo, hi, rows } });
         worker.on("message", (msg: { progress?: number; result?: ShardResult }) => {
           if (msg.progress !== undefined) { done[i] = msg.progress; report(); }
           if (msg.result) { done[i] = hi - lo; resolve(msg.result); }
@@ -154,7 +193,7 @@ async function main(): Promise<void> {
     }),
   );
 
-  const counts = new Array<number>(new Board().bins.length).fill(0);
+  const counts = new Array<number>(new Board(spec).bins.length).fill(0);
   const binSeeds: number[][] = Array.from({ length: counts.length }, () => []);
   const unsettledSeeds: number[] = [];
   let unsettled = 0;
@@ -176,7 +215,7 @@ async function main(): Promise<void> {
     binSeeds[i].length = Math.min(binSeeds[i].length, SEEDS_PER_BIN);
   }
 
-  const spot = run(new Board(), 0, SPOT_CHECK_RUNS);
+  const spot = run(new Board(spec), 0, SPOT_CHECK_RUNS);
   const seconds = (performance.now() - t0) / 1000;
   process.stdout.write(`\r  done in ${seconds.toFixed(0)}s${" ".repeat(30)}\n`);
 
@@ -184,8 +223,8 @@ async function main(): Promise<void> {
   const meanFall = (steps / runs) * DT;
   // Relative to the project root, not to import.meta.url — this file runs as a
   // bundle out of node_modules/.tmp, where ../sim/ is not the source tree.
-  const out = resolve(process.cwd(), "src/sim/measured.data.ts");
-  writeFileSync(out, emit({ runs, counts, unsettled, unsettledSeeds, binSeeds, meanFall, spot }));
+  const out = resolve(process.cwd(), `src/sim/measured.${rows}.data.ts`);
+  writeFileSync(out, emit({ rows, runs, counts, unsettled, unsettledSeeds, binSeeds, meanFall, spot }));
 
   console.log(`  unsettled ${unsettled}, mean fall ${meanFall.toFixed(3)}s`);
   if (unsettledSeeds.length) console.log(`  never settled: seeds ${unsettledSeeds.join(", ")}`);
@@ -196,10 +235,10 @@ async function main(): Promise<void> {
     const p = counts[i] / settled;
     console.log(`  bin ${String(i).padStart(2)}  ${String(counts[i]).padStart(10)}  ${(p * 100).toFixed(5)}%`);
   }
-  console.log("\nwrote src/sim/measured.data.ts — commit it, and regenerate the Derived Table (ADR 0001).");
 }
 
 interface Emitted {
+  rows: Rows;
   runs: number;
   counts: number[];
   unsettled: number;
@@ -209,7 +248,7 @@ interface Emitted {
   spot: ShardResult;
 }
 
-function emit({ runs, counts, unsettled, unsettledSeeds, binSeeds, meanFall, spot }: Emitted): string {
+function emit({ rows, runs, counts, unsettled, unsettledSeeds, binSeeds, meanFall, spot }: Emitted): string {
   const list = (xs: readonly number[]) => `[\n  ${xs.join(",\n  ")},\n]`;
 
   /** Eight to a line: 2 176 seeds one per line would bury the rest of the file. */
@@ -226,9 +265,9 @@ function emit({ runs, counts, unsettled, unsettledSeeds, binSeeds, meanFall, spo
     .join("\n");
 
   return `/**
- * GENERATED by \`npm run measure\`. Do not edit by hand.
+ * GENERATED by \`npm run measure -- ${rows}\`. Do not edit by hand.
  *
- * The Measured Distribution: what ${BOARD.rows} rows of honest physics actually do.
+ * The Measured Distribution: what ${rows} rows of honest physics actually do.
  *
  * Raw per-bin counts over seeds 0..${(runs - 1).toLocaleString("en-US")}. Counts rather than
  * probabilities, because counts are exact and let a later run be merged in.
@@ -237,8 +276,11 @@ function emit({ runs, counts, unsettled, unsettledSeeds, binSeeds, meanFall, spo
  * Derived Table is solved against these numbers instead of against a binomial.
  */
 
+/** The board these counts came off. One artefact per row count; see ADR 0008. */
+export const MEASURED_ROWS = ${rows};
+
 /** The tuning these counts were measured under; see src/sim/fingerprint.ts. */
-export const MEASURED_TUNING = ${JSON.stringify(TUNING_FINGERPRINT)};
+export const MEASURED_TUNING = ${JSON.stringify(FINGERPRINTS[rows])};
 
 export const MEASURED_SAMPLES = ${runs};
 
@@ -287,8 +329,8 @@ export const SEEDS_PER_BIN = ${SEEDS_PER_BIN};
  * bin k" is reproducible by anyone with the solver, so a player can recompute
  * this pool instead of trusting that it was assembled honestly.
  *
- * Every seed here settled. The three that hang are in UNSETTLED_SEEDS and
- * cannot appear below, so a steered drop cannot draw one.
+ * Every seed here settled. Any that hang are in UNSETTLED_SEEDS and cannot
+ * appear below, so a steered drop cannot draw one.
  */
 export const BIN_SEEDS: readonly (readonly number[])[] = [
 ${index}

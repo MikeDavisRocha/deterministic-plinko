@@ -27,6 +27,17 @@
           <button id="mode-outcome">outcome-first</button>
         </div>
 
+        <!-- Each row count is its own board, its own 100-million drop
+             measurement and its own solved tables. See ADR 0008. -->
+        <div class="field">
+          <label>rows <span class="dim">own board</span></label>
+          <div id="rows" class="row seg">
+            <button id="rows-8">8</button>
+            <button id="rows-12">12</button>
+            <button id="rows-16" class="on">16</button>
+          </div>
+        </div>
+
         <div class="field">
           <label>risk <span class="dim">same rtp</span></label>
           <div id="risks" class="row seg">
@@ -101,6 +112,7 @@
           <dt>returned</dt><dd id="r-returned">0.00</dd>
           <dt>rtp so far</dt><dd id="r-actual">—</dd>
           <dt>rtp target</dt><dd id="r-rtp">—</dd>
+          <dt>board</dt><dd id="r-rows">16</dd>
           <dt>tick</dt><dd id="r-tick">120 hz</dd>
           <dt>fps</dt><dd id="r-fps">—</dd>
         </dl>

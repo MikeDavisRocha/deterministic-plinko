@@ -11,9 +11,9 @@ scratch — no physics engine. Every collision, bounce and landing is code in th
 repository, tuned by measurement rather than by feel, and the whole simulation
 runs headless as easily as it renders.
 
-It ships two game modes on one board, and they run **the same solver, the same
-geometry and the same trajectories**. What differs is who decides where the disc
-lands: in one the physics decides, in the other the outcome is committed to
+It ships two game modes on the same board, and they run **the same solver, the
+same geometry and the same trajectories**. What differs is who decides where the
+disc lands: in one the physics decides, in the other the outcome is committed to
 before the disc moves and the board is steered to it. Both pay the same return
 to player by opposite routes.
 
@@ -41,6 +41,16 @@ ride.
 Both modes take the risk level, and Physics-First solves a separate table for
 each against the same measured distribution — three risks, one measurement, no
 regeneration, because the distribution does not depend on what the bins pay.
+
+**Rows are the other decision, and they are not free.** The board comes in 8, 12
+and 16 rows, and each one is a different board rather than a zoom level: a walk
+of eight steps has not had enough rows to converge on a binomial, so the 8-row
+board's distribution is measurably its own. Each row count therefore ships its
+own 100-million drop measurement, its own seed index and its own solved tables:
+three artefacts, forty minutes of measurement, and the thing that finally makes
+the board legible on a phone: nine bins across 390px instead of seventeen, each
+one 31px wide rather than 18px. See
+[ADR 0008](docs/adr/0008-a-row-count-is-a-board-not-a-setting.md).
 
 The session prints what you wagered, what came back, and the ratio between them
 next to the target. Over a few hundred drops it visibly walks towards the figure
@@ -92,9 +102,11 @@ Peg contacts flash, the trail fades behind the disc, and every trajectory bakes
 into a persistent low-alpha texture — after a few hundred drops the board has
 drawn its own distribution without a chart.
 
-Landing is scaled by what the bin paid, on a log curve because the table spans
-0.3x to 230x: the bin lights and its label pops, sparks fan out of the mouth,
-and the screen shakes in proportion. A 0.3x gets a shrug; 230x shakes.
+Landing is scaled by what the bin paid, on a log curve because a table spans
+0.3x to 230x, and against the best bin on the board in play rather than a fixed
+ceiling — so 8.46x reads as the jackpot it is on the 8-row board. The bin lights
+and its label pops, sparks fan out of the mouth, and the screen shakes in
+proportion. A 0.3x gets a shrug; the edge shakes.
 
 **Audio is synthesised at runtime** — no files, no fetch, nothing to 404. That
 is also the only way to make a peg click *follow the physics*: pitch and volume
@@ -120,12 +132,12 @@ each bin returns what the same bin returns in the other mode, matching the
 volatility and not merely the total. It prints 230x where the industry prints
 110x, and that visible divergence is the result, not an embarrassment.
 
-**The distribution is measured, not assumed.** 100 million headless drops, 21
-minutes across 11 shards, committed as a build artefact with the sample count
-behind it — because the tail entries need far more samples than the body, and
-the Derived Table is only as good as its tail estimates. Bin 0 lands 700 times
-in 100 million: a 3.8% relative standard error, and the reason the run is that
-size. A fingerprint of every number that can move a trajectory ships with it, so
+**The distribution is measured, not assumed.** 100 million headless drops per
+board, 40 minutes across 11 shards for the three of them, committed as build
+artefacts with the sample count behind them — because the tail entries need far
+more samples than the body, and the Derived Table is only as good as its tail
+estimates. On the 16-row board bin 0 lands 700 times in 100 million: a 3.8%
+relative standard error, and the reason the run is that size. A fingerprint of every number that can move a trajectory ships with it, so
 changing gravity fails the suite with a regenerate-me message instead of quietly
 shipping a payout table solved against a board that no longer exists.
 
@@ -179,14 +191,20 @@ draws in 282 ms** (28 µs each).
 
 ## Numbers worth knowing
 
-- 16 rows, 17 bins, mean fall 4.035 simulated seconds — a tuning target, not a
+- Three boards, 8/12/16 rows, each measured over 100 000 000 drops at the same
+  tuning. Mean fall 2.257 s, 3.142 s and 4.035 s — a tuning target, not a
   consequence
-- Physics is binomial through the body and not in the tail: bins 3–13 land
-  within 0.6% of binomial, the outermost pair at 0.46× and the next at 1.36×
-- 3 drops in 100 million never settle. They are named in the artefact and
+- **How binomial the walk is depends on how long it is.** Total variation
+  distance from the binomial is 0.0028 at 16 rows, 0.0111 at 12 and 0.0704 at 8.
+  The outermost bins come up at 0.48x their binomial rate on the 16-row board
+  and 1.54x on the 8-row one, so the same solve corrects the tail in opposite
+  directions on two boards — which is the clearest evidence there is that it
+  follows the measurement rather than a habit about tails
+- 3 drops in 100 million never settle, all on the 16-row board. They are named
+  in the artefact and
   replayable one by one; Outcome-First cannot draw them, because only settled
   drops enter a seed pool
-- 108 tests, including all 2 176 indexed seeds re-simulated on every run to
+- 210 tests, including all 4 992 indexed seeds re-simulated on every run to
   confirm each lands in the bin it is filed under
 
 ## Run it
@@ -197,9 +215,11 @@ npm run dev
 ```
 
 ```bash
-npm test         # 108 tests
-npm run measure  # regenerate the distribution + seed index — 21 min, 11 shards
-npm run symmetry # sweep a million mirrored spawn pairs
+npm test         # 210 tests
+npm run measure  # regenerate all three boards' distributions + seed indexes
+                 #   40 min on 11 shards; takes a row count to do just one
+npm run derived  # print the solved payout tables to paste into derived.ts
+npm run symmetry # sweep a million mirrored spawn pairs, on every board
 npm run golden   # print trajectory hashes, to compare across engines
 ```
 
@@ -215,6 +235,7 @@ The reasoning lives in [`docs/adr/`](docs/adr), and the domain language in
 5. [The Target Bin is drawn from the commitment](docs/adr/0005-the-target-bin-is-drawn-from-the-commitment.md)
 6. [Outcome-First steers by seed index](docs/adr/0006-outcome-first-steers-by-seed-index.md)
 7. [Risk is a choice between volatilities, not between values](docs/adr/0007-risk-is-a-choice-between-volatilities.md)
+8. [A row count is a board, not a setting](docs/adr/0008-a-row-count-is-a-board-not-a-setting.md)
 
 ## Stack
 

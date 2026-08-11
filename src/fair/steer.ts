@@ -1,13 +1,16 @@
-import { BOARD } from "../sim/config";
-import { BIN_SEEDS } from "../sim/measured";
+import { DEFAULT_ROWS, Rows } from "../sim/config";
+import { MEASURED_RUNS } from "../sim/measured";
 import { FairSeeds, floatsOf, targetBinOf } from "./commitment";
 
 /**
  * Steering: how a disc reaches the Target Bin the commitment already named.
  *
  * The physics is not touched, persuaded or nudged. The Seed Index in
- * measured.data.ts lists, per bin, the first 128 seeds under MEASURED_SAMPLES
- * that settle there, so steering is a lookup — the commitment picks the bin and
+ * measured.<rows>.data.ts lists, per bin, the first 128 seeds under
+ * MEASURED_SAMPLES that settle there — one index per board, because a seed that
+ * lands in bin 3 of the 16-row board says nothing about where it lands on a
+ * board with four fewer rows. So steering is a lookup: the commitment picks the
+ * bin and
  * then picks a seed out of that bin's pool, and the solver runs exactly the drop
  * it would have run in Physics-First Mode. Same `World`, same `step()`, same
  * replay.
@@ -28,6 +31,8 @@ import { FairSeeds, floatsOf, targetBinOf } from "./commitment";
 
 /** What the commitment decided, and the drop that will show it. */
 export interface SteeredDrop {
+  /** The board this drop is for. The walk is this many steps long. */
+  readonly rows: Rows;
   /** The bin drawn from the commitment, before anything was simulated. */
   readonly targetBin: number;
   /** The seed to hand `new World(board, seed)`. Settles in `targetBin`. */
@@ -37,16 +42,16 @@ export interface SteeredDrop {
   readonly poolSize: number;
 }
 
-export function steerOf(seeds: FairSeeds, rows: number = BOARD.rows): SteeredDrop {
+export function steerOf(seeds: FairSeeds, rows: Rows = DEFAULT_ROWS): SteeredDrop {
   const targetBin = targetBinOf(seeds, rows);
-  const pool = BIN_SEEDS[targetBin];
+  const pool = MEASURED_RUNS[rows].binSeeds[targetBin];
 
   if (!pool?.length) {
     throw new Error(
       `no seed indexed for bin ${targetBin} — the Seed Index in ` +
-      `measured.data.ts is empty there, so this bin was drawn but cannot be ` +
-      `shown. Regenerate with \`npm run measure\` at a sample count that ` +
-      `fills it.`,
+      `measured.${rows}.data.ts is empty there, so this bin was drawn but ` +
+      `cannot be shown. Regenerate with \`npm run measure -- ${rows}\` at a ` +
+      `sample count that fills it.`,
     );
   }
 
@@ -56,5 +61,5 @@ export function steerOf(seeds: FairSeeds, rows: number = BOARD.rows): SteeredDro
   const pick = floatsOf(seeds, rows + 1)[rows];
   const poolIndex = Math.min(pool.length - 1, Math.floor(pick * pool.length));
 
-  return { targetBin, seed: pool[poolIndex], poolIndex, poolSize: pool.length };
+  return { rows, targetBin, seed: pool[poolIndex], poolIndex, poolSize: pool.length };
 }

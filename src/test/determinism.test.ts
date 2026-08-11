@@ -1,26 +1,28 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { DT, MAX_SPEED, BOARD, CLEARANCE } from "../sim/config";
+import { BOARDS, clearanceOf, DT, maxSpeedOf, ROW_COUNTS } from "../sim/config";
 import { Board } from "../sim/Board";
 import { World } from "../sim/World";
 import { MAX_STEPS } from "../sim/simulate";
 import { mulberry32 } from "../core/Rng";
 import { verifyDeterminism } from "./determinism";
-import { GOLDEN, trajectoryHash } from "./golden";
+import { GOLDEN, GOLDEN_DROPS, trajectoryHash } from "./golden";
 
 describe("replay", () => {
-  it("reproduces a seed bit for bit", () => {
-    expect(verifyDeterminism(12345)).toBe(true);
-  });
+  for (const rows of ROW_COUNTS) {
+    it(`reproduces a seed bit for bit at ${rows} rows`, () => {
+      expect(verifyDeterminism(12345, rows)).toBe(true);
+    });
+  }
 
   // Same-engine equality is the weak half of the check: it passes under V8 and
   // passes under JavaScriptCore while the two disagree with each other. The
   // hashes are the half that catches that — run `npm run golden` on a second
   // engine to close the loop. See ADR 0002.
-  for (const seed of Object.keys(GOLDEN).map(Number)) {
-    it(`matches the committed trajectory hash for seed ${seed}`, () => {
-      expect(trajectoryHash(seed)).toBe(GOLDEN[seed]);
+  for (const { rows, seed } of GOLDEN_DROPS) {
+    it(`matches the committed trajectory hash for seed ${seed} at ${rows} rows`, () => {
+      expect(trajectoryHash(seed, rows)).toBe(GOLDEN[rows][seed]);
     });
   }
 });
@@ -54,17 +56,25 @@ describe("the solver's engine-dependent-operation ban", () => {
   });
 });
 
-describe("board invariants", () => {
+describe.each(ROW_COUNTS)("board invariants at %i rows", (rows) => {
+  const spec = BOARDS[rows];
+
   it("leaves the disc room to pass between two pegs of a row", () => {
-    expect(CLEARANCE).toBeGreaterThan(0);
+    expect(clearanceOf(spec)).toBeGreaterThan(0);
   });
 
   it("cannot tunnel a peg in one step", () => {
-    expect(MAX_SPEED * DT).toBeLessThan(BOARD.discRadius + BOARD.pegRadius);
+    expect(maxSpeedOf(spec) * DT).toBeLessThan(spec.discRadius + spec.pegRadius);
   });
 
+  /**
+   * Every board keeps its lattice on integers about an integer centre — 350,
+   * 278, 206 — which is what ADR 0004's licence to symmetrise rests on, and
+   * why the widths in BOARDS are the numbers they are rather than round ones.
+   */
   it("places its pegs and bins in exact mirror image", () => {
-    const board = new Board();
+    const board = new Board(spec);
+    expect(Number.isInteger(board.centerX)).toBe(true);
     for (const peg of board.pegs) {
       // Exact, not approximate: peg x land on integers about centerX = 350, so
       // a mirrored pair has no rounding to forgive. Anything else means the
@@ -94,8 +104,8 @@ describe("board invariants", () => {
  *
  * A few thousand pairs here; `npm run symmetry` sweeps a million.
  */
-describe("mirror symmetry", () => {
-  const board = new Board();
+describe.each(ROW_COUNTS)("mirror symmetry at %i rows", (rows) => {
+  const board = new Board(BOARDS[rows]);
   const lastBin = board.bins.length - 1;
 
   const binFromSpawn = (x: number) => {
@@ -111,7 +121,7 @@ describe("mirror symmetry", () => {
 
   it("mirrors the bin for every jitter the RNG produces", () => {
     for (let seed = 0; seed < 2000; seed++) {
-      const j = (mulberry32(seed)() - 0.5) * 2 * BOARD.spawnJitter;
+      const j = (mulberry32(seed)() - 0.5) * 2 * board.spec.spawnJitter;
       expect(mirrors(j), `seed ${seed}, jitter ${j}`).toBe(true);
     }
   });
@@ -120,7 +130,7 @@ describe("mirror symmetry", () => {
     // An even grid reaches spawns the RNG may never pick.
     const N = 2000;
     for (let k = 1; k <= N; k++) {
-      const j = (k / (N + 1)) * BOARD.spawnJitter;
+      const j = (k / (N + 1)) * board.spec.spawnJitter;
       expect(mirrors(j), `jitter ${j}`).toBe(true);
     }
   });

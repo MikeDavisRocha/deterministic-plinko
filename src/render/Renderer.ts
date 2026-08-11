@@ -10,15 +10,27 @@ import { PAL } from "./palette";
 const TRAIL_LEN = 18;
 const FLASH_MS = 150;
 
+/**
+ * What a bin label would like to be, before the widest one in the table gets a
+ * say. Chosen so a three-character multiplier fills a 36px bin comfortably; see
+ * drawBins for what happens when the table prints something longer.
+ */
+const BIN_FONT_SIZE = 14;
+
 export class Renderer {
   private pegLayer = new Graphics();
   private flashLayer = new Graphics();
   private binLayer = new Graphics();
   private binLabels = new Container();
+  /** Each label's resting scale, which is 1 unless it had to be shrunk to fit. */
+  private labelScale: number[] = [];
+  /** The best bin on the board in play, which is what a hit is scaled against. */
+  private topMultiplier = 1;
   private liveTrail = new Graphics();
   private discG = new Graphics();
 
   private ghostTex: RenderTexture;
+  private ghostSprite: Sprite;
   private ghostScratch = new Graphics();
 
   private trail: number[] = [];          // flat [x0,y0,x1,y1,...]
@@ -50,6 +62,7 @@ export class Renderer {
     });
     const ghostSprite = new Sprite(this.ghostTex);
     ghostSprite.alpha = 1;
+    this.ghostSprite = ghostSprite;
 
     root.addChild(
       ghostSprite, this.binLayer, this.binLabels,
@@ -71,11 +84,17 @@ export class Renderer {
   }
 
   /**
-   * Point the renderer at another board. Both modes share a BoardSpec, so this
-   * is only ever a change of payout table — and seeing 110x become 230x at the
-   * edges when the mode switches is the clearest statement the project makes.
+   * Point the renderer at another board.
+   *
+   * Two modes and three risks share one BoardSpec, so most switches are only a
+   * change of payout table — and seeing 110x become 230x at the edges when the
+   * mode switches is the clearest statement the project makes. A change of row
+   * count is the other kind: a different geometry in a differently sized frame,
+   * which means the canvas, the ghost texture and the lattice all have to be
+   * rebuilt.
    */
   setBoard(board: Board) {
+    const rebuilt = board.spec !== this.board.spec;
     this.board = board;
     // A glow in flight was scaling a label that drawBins is about to destroy,
     // and its sparks belong to the drop that just ended on the old table.
@@ -83,21 +102,73 @@ export class Renderer {
     this.binGlowMs = 0;
     this.sparks.length = 0;
     this.shake = 0;
+    if (rebuilt) this.rebuild();
+    else this.drawBins();
+  }
+
+  /**
+   * Re-lay the board for a new spec. The ghost texture is sized to the board it
+   * bakes, so a new board gets a new one — and the old picture goes with it,
+   * which is correct: those trajectories fell through a different lattice and
+   * pooling them would describe neither board.
+   */
+  private rebuild() {
+    const spec = this.board.spec;
+    this.app.renderer.resize(spec.width, spec.height);
+
+    const old = this.ghostTex;
+    this.ghostTex = RenderTexture.create({
+      width: spec.width,
+      height: spec.height,
+      resolution: this.app.renderer.resolution,
+    });
+    this.ghostSprite.texture = this.ghostTex;
+    old.destroy(true);
+
+    this.pegLayer.clear();
+    this.drawPegsOnce();
+    this.flashes.clear();
+    this.flashLayer.clear();
+    this.resetTrail();
     this.drawBins();
   }
 
+  /**
+   * The bins, and the labels sized to the room a bin actually has.
+   *
+   * A bin is `spacingX` wide on every board, so what decides how big a
+   * multiplier can be printed is not the row count but the longest string in the
+   * table: "0.3" fits at 14px, "2100x" does not. So the board is laid out once
+   * at a size chosen for legibility, the widest label is measured, and *every*
+   * label is scaled by the same factor if that one would spill. One factor
+   * rather than one per label, because bins printing at visibly different sizes
+   * next to each other reads as a bug.
+   *
+   * The room allowed is the bin's own inner width, so a label may touch its
+   * bin's edge but can never reach its neighbour's.
+   *
+   * Measured on a 390px phone, at medium risk: the 16-row board prints 6.7px
+   * and the 8-row board 7.6px, in bins that are 18px and 31px wide on screen.
+   * The font barely moves and the bin nearly doubles — which is the honest
+   * shape of this fix, and the reason it is a smaller board rather than a
+   * bigger font.
+   */
   private drawBins() {
     const y = this.board.binY;
+    const spec = this.board.spec;
+    const maxWidth = spec.spacingX - 4;
     const style = (color: number) =>
-      new TextStyle({ fontFamily: "JetBrains Mono", fontSize: 10, fill: color });
+      new TextStyle({ fontFamily: "JetBrains Mono", fontSize: BIN_FONT_SIZE, fill: color });
 
     this.binLayer.clear();
     this.binLabels.removeChildren().forEach((c) => c.destroy());
+    this.labelScale.length = 0;
+    this.topMultiplier = Math.max(1, ...this.board.bins.map((b) => b.multiplier));
 
     for (const bin of this.board.bins) {
       const hot = bin.multiplier >= 3;
       this.binLayer
-        .roundRect(bin.left + 2, y, bin.right - bin.left - 4, this.board.spec.binHeight, 4)
+        .roundRect(bin.left + 2, y, bin.right - bin.left - 4, spec.binHeight, 4)
         .fill({ color: PAL.panel })
         .stroke({ width: 1, color: hot ? PAL.win : PAL.peg });
 
@@ -107,9 +178,14 @@ export class Renderer {
       });
       label.anchor.set(0.5);
       label.x = bin.x;
-      label.y = y + this.board.spec.binHeight / 2;
+      label.y = y + spec.binHeight / 2;
       this.binLabels.addChild(label);
     }
+
+    const widest = Math.max(...this.binLabels.children.map((l) => l.width));
+    const fit = widest > maxWidth ? maxWidth / widest : 1;
+    for (const label of this.binLabels.children) label.scale.set(fit);
+    this.labelScale = this.binLabels.children.map(() => fit);
   }
 
   /**
@@ -122,9 +198,14 @@ export class Renderer {
     const bin = this.board.bins[binIndex];
     if (!bin) return;
 
-    // log2 because the table spans 0.3x to 230x; linear scaling would make
-    // everything below 10x indistinguishable.
-    const weight = Math.min(1, Math.max(0, Math.log2(multiplier + 1) / Math.log2(231)));
+    // log2 because a table spans 0.3x to 230x; linear scaling would make
+    // everything below 10x indistinguishable. Measured against the best bin on
+    // *this* board, so a 9x on the 8-row board reads as the jackpot it is
+    // there rather than as a shrug borrowed from a board that pays 2100x.
+    const weight = Math.min(
+      1,
+      Math.max(0, Math.log2(multiplier + 1) / Math.log2(this.topMultiplier + 1)),
+    );
     const win = multiplier >= 1;
 
     this.binGlow = binIndex;
@@ -188,7 +269,9 @@ export class Renderer {
     const bin = this.board.bins[this.binGlow];
     if (this.binGlowMs <= 0 || !bin) {
       this.binGlow = -1;
-      for (const label of this.binLabels.children) label.scale.set(1);
+      // Back to resting scale, which is not always 1: a label too wide for its
+      // bin was shrunk to fit, and resetting it to 1 would let it spill.
+      this.binLabels.children.forEach((label, i) => label.scale.set(this.labelScale[i] ?? 1));
       return;
     }
 
@@ -203,7 +286,9 @@ export class Renderer {
 
     // The label rides the same curve, which is what sells it as one event
     // rather than a rectangle that happened to light up behind some text.
-    this.binLabels.children[this.binGlow]?.scale.set(1 + t * 0.35);
+    this.binLabels.children[this.binGlow]?.scale.set(
+      (this.labelScale[this.binGlow] ?? 1) * (1 + t * 0.35),
+    );
   }
 
   /** Sparks are a flat array so a burst of fifty allocates nothing per frame. */

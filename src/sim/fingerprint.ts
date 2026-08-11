@@ -1,5 +1,5 @@
 import { hashFloats } from "../core/hash";
-import { BOARD, BoardSpec, DT, PHYS, Phys } from "./config";
+import { BOARD, BOARDS, BoardSpec, DT, PHYS, Phys, Rows, ROW_COUNTS } from "./config";
 
 /**
  * A hash of every number that can move a trajectory.
@@ -36,4 +36,14 @@ export function fingerprintOf(phys: Phys, board: BoardSpec, dt: number): string 
   ]);
 }
 
+/**
+ * One per board, because each board has its own measurement to invalidate.
+ * The row count is inside the hash, so these could not collide even if two
+ * boards agreed on everything else.
+ */
+export const FINGERPRINTS: Record<Rows, string> = Object.fromEntries(
+  ROW_COUNTS.map((rows) => [rows, fingerprintOf(PHYS, BOARDS[rows], DT)]),
+) as Record<Rows, string>;
+
+/** The 16-row board's, which is what the ADRs before 0008 mean by "the tuning". */
 export const TUNING_FINGERPRINT = fingerprintOf(PHYS, BOARD, DT);

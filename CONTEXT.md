@@ -13,7 +13,9 @@ rather than assumed, and a payout model solved against the measurement.
 
 **Board**:
 The static lattice of pegs and the row of bins beneath it. Generated once from
-constants; never mutated by a drop.
+constants; never mutated by a drop. There are three, one per [[Row Count]],
+sharing every constant that touches a collision and differing only in how many
+rows the lattice has and how wide a frame it needs.
 _Avoid_: field, grid, layout
 
 **Peg**:
@@ -24,6 +26,15 @@ _Avoid_: pin, nail, obstacle
 One horizontal line of pegs. Row index doubles as the step index of the
 left/right walk a disc performs on its way down.
 _Avoid_: line, level, layer
+
+**Row Count**:
+How many rows a [[Board]] has: 8, 12 or 16. The player's choice of board, and
+the only one that changes the physics rather than the payouts. Each row count is
+its own [[Measured Distribution]], its own [[Seed Index]], its own
+[[Reference Table]] and its own [[Derived Table]], because a walk of eight steps
+is not a smaller picture of a walk of sixteen. See
+docs/adr/0008-a-row-count-is-a-board-not-a-setting.md.
+_Avoid_: size, difficulty, level, zoom
 
 **Disc**:
 The falling body. Exactly one is in flight per drop.
@@ -95,9 +106,11 @@ _Avoid_: fair mode, casino mode, rigged mode, guided mode
 
 **Measured Distribution**:
 The empirical per-bin probabilities produced by a large offline run of the
-solver at a fixed tuning. Committed as a build artefact alongside the sample
-count that produced it, because the [[Derived Table]] is only as trustworthy as
-the tail estimates behind it.
+solver at a fixed tuning, one per [[Board]]. Committed as a build artefact
+alongside the sample count that produced it, because the [[Derived Table]] is
+only as trustworthy as the tail estimates behind it. All three boards are
+measured over the same 100 000 000 drops, so a difference between them is a
+difference in the board rather than in how hard it was sampled.
 _Avoid_: histogram, empirical curve
 
 **Symmetrised Distribution**:
@@ -109,8 +122,8 @@ docs/adr/0004-the-measured-lopsidedness-is-the-samples-not-the-boards.md.
 _Avoid_: smoothed distribution, folded distribution
 
 **Seed Index**:
-Per bin, the first 128 seeds under the [[Measured Distribution]]'s sample count
-that settle there. What [[Outcome-First Mode]] draws a trajectory from once the
+Per [[Board]] and bin, the first 128 seeds under the
+[[Measured Distribution]]'s sample count that settle there. What [[Outcome-First Mode]] draws a trajectory from once the
 [[Commitment]] has named a [[Target Bin]] — steering is a lookup, so the solver
 runs the same drop it would have run in [[Physics-First Mode]]. Canonical
 rather than curated: "the first 128 seeds landing in bin k" is reproducible by
@@ -119,20 +132,22 @@ same run. See docs/adr/0006-outcome-first-steers-by-seed-index.md.
 _Avoid_: seed table, seed pool, lookup table
 
 **Reference Table**:
-The industry-standard 16-row medium-risk multiplier table. Pays exactly 98.99%
-against a true binomial. Used by [[Outcome-First Mode]] unchanged.
+An industry-standard multiplier table, one per [[Row Count]] and risk level.
+Each pays about 98.99% against a true binomial; the 16-row medium one pays
+exactly 64873/65536. Used by [[Outcome-First Mode]] unchanged.
 _Avoid_: stake table, standard table, real table
 
 **Derived Table**:
-A multiplier table solved so that it pays 98.99% against the
-[[Symmetrised Distribution]] rather than against a binomial. Used by
-[[Physics-First Mode]]. Solved per bin rather than scaled as a whole, so each
+A multiplier table solved so that it pays what its [[Reference Table]] pays,
+against the [[Symmetrised Distribution]] rather than against a binomial. One per
+[[Board]] and risk level. Used by [[Physics-First Mode]]. Solved per bin rather than scaled as a whole, so each
 bin returns what the same bin returns under [[Outcome-First Mode]]; the body is
 untouched and the tail carries the whole correction, printing 230x where the
-[[Reference Table]] prints 110x. Rounded to a printable grid, which costs
-0.0568 of a point: it pays 99.0468%, and that is the figure to quote. Computed
-from the committed distribution rather than committed separately, so it cannot
-go stale against it.
+[[Reference Table]] prints 110x. Rounded to the coarsest printable grid that
+still pays what the exact solve pays; at 16 rows and medium risk that costs
+0.0568 of a point, so it pays 99.0468%, and that is the figure to quote.
+Computed from the committed distribution rather than committed separately, so it
+cannot go stale against it.
 _Avoid_: custom table, tuned table, fixed table
 
 ### Provably fair
@@ -158,8 +173,9 @@ _Avoid_: hash, pledge, seed hash
 **Target Bin**:
 The bin [[Outcome-First Mode]] draws from the [[Commitment]] before the disc
 moves, and the bin the [[Drop]] is then steered into. Derived as the number of
-right steps in a 16-step walk read out of HMAC-SHA256, so it is binomial by
-construction. See
+right steps in a walk of one step per [[Row]] read out of HMAC-SHA256, so it is
+binomial by construction. The walk's length is the board's, which is why a
+verifier is given the [[Row Count]] alongside the three seeds. See
 docs/adr/0005-the-target-bin-is-drawn-from-the-commitment.md.
 _Avoid_: chosen bin, intended bin, predetermined bin
 

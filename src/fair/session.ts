@@ -1,3 +1,4 @@
+import { DEFAULT_ROWS, Rows } from "../sim/config";
 import { commitOf, FairSeeds } from "./commitment";
 import { SteeredDrop, steerOf } from "./steer";
 
@@ -43,16 +44,23 @@ export class Session {
   }
 
   /**
-   * The drop at a given Nonce. Pure, so replaying one costs nothing and moves
-   * nothing — a player can recompute any drop of the session after the fact.
+   * The drop at a given Nonce, on a given board. Pure, so replaying one costs
+   * nothing and moves nothing — a player can recompute any drop of the session
+   * after the fact.
+   *
+   * The row count is an argument rather than a property of the session, because
+   * it is a property of the board and not of the commitment: the same three
+   * values decide a 16-step walk and an 8-step one, and a player who switches
+   * boards mid-session is still playing the seed they were promised. It is what
+   * a third-party verifier asks for alongside the seeds, for the same reason.
    */
-  drawAt(nonce: number): SteeredDrop {
-    return steerOf(this.seedsAt(nonce));
+  drawAt(nonce: number, rows: Rows = DEFAULT_ROWS): SteeredDrop {
+    return steerOf(this.seedsAt(nonce), rows);
   }
 
   /** The next drop, advancing the Nonce. */
-  deal(): SteeredDrop & { readonly nonce: number } {
+  deal(rows: Rows = DEFAULT_ROWS): SteeredDrop & { readonly nonce: number } {
     const nonce = this.n++;
-    return { ...this.drawAt(nonce), nonce };
+    return { ...this.drawAt(nonce, rows), nonce };
   }
 }

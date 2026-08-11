@@ -10,9 +10,10 @@
  * Driven by scripts/cross-engine.mjs. See ADR 0002 for why an engine other
  * than V8 has to be the one answering.
  */
-import { GOLDEN, trajectoryHash } from "./golden";
+import { GOLDEN, GOLDEN_DROPS, trajectoryHash } from "./golden";
 
 export interface CrossEngineRow {
+  readonly rows: number;
   readonly seed: number;
   readonly got: string;
   readonly want: string;
@@ -20,6 +21,9 @@ export interface CrossEngineRow {
 
 (globalThis as unknown as Record<string, unknown>).__crossEngine =
   (): CrossEngineRow[] =>
-    Object.keys(GOLDEN)
-      .map(Number)
-      .map((seed) => ({ seed, got: trajectoryHash(seed), want: GOLDEN[seed] }));
+    GOLDEN_DROPS.map(({ rows, seed }) => ({
+      rows,
+      seed,
+      got: trajectoryHash(seed, rows),
+      want: GOLDEN[rows][seed],
+    }));

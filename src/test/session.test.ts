@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import { commitOf, verifyCommit } from "../fair/commitment";
 import { Session } from "../fair/session";
 import { Board } from "../sim/Board";
-import { BOARD, REFERENCE_TABLE } from "../sim/config";
+import {
+  BOARD, BOARDS, DEFAULT_ROWS, REFERENCE_TABLE, REFERENCE_TABLES, ROW_COUNTS,
+} from "../sim/config";
 import { simulate } from "../sim/simulate";
 
 const SERVER = "6b9dd7a1f0c3e5824d7a0be91c4f83d55e2a7c16b8409df3a1e6c0b7d2951f8e";
@@ -33,6 +35,7 @@ describe("a provably fair session", () => {
     s.deal();
     s.deal();
     expect(s.drawAt(first.nonce)).toEqual({
+      rows: DEFAULT_ROWS,
       targetBin: first.targetBin,
       seed: first.seed,
       poolIndex: first.poolIndex,
@@ -73,5 +76,23 @@ describe("a provably fair session", () => {
       expect(simulate(board, drop.seed)).toBe(drop.targetBin);
     }
     expect(verifyCommit(s.serverSeed, s.commit)).toBe(true);
+  });
+
+  /**
+   * And keeps landing them when the player changes board mid-session. The row
+   * count is an argument to the draw rather than a property of the session
+   * (ADR 0008), so one commitment covers drops of different walk lengths — and
+   * every one of them still has to land where it was promised.
+   */
+  it("keeps its promise across a change of board", () => {
+    const s = session();
+    for (let i = 0; i < 20; i++) {
+      for (const rows of ROW_COUNTS) {
+        const drop = s.deal(rows);
+        const board = new Board(BOARDS[rows], REFERENCE_TABLES[rows].medium);
+        expect(drop.rows).toBe(rows);
+        expect(simulate(board, drop.seed)).toBe(drop.targetBin);
+      }
+    }
   });
 });

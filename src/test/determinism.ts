@@ -1,10 +1,10 @@
 import { Board } from "../sim/Board";
 import { World } from "../sim/World";
-import { DT } from "../sim/config";
+import { BOARDS, DEFAULT_ROWS, DT, Rows } from "../sim/config";
 
 /** Runs the same seed twice and compares every single state, bit for bit. */
-export function verifyDeterminism(seed = 12345): boolean {
-  const board = new Board();
+export function verifyDeterminism(seed = 12345, rows: Rows = DEFAULT_ROWS): boolean {
+  const board = new Board(BOARDS[rows]);
   const trace = (s: number) => {
     const w = new World(board, s);
     const out: number[] = [];
@@ -28,6 +28,6 @@ export function verifyDeterminism(seed = 12345): boolean {
       return false;
     }
   }
-  console.log(`deterministic: ${a.length / 4} steps identical`);
+  console.log(`deterministic: ${a.length / 4} steps identical on ${rows} rows`);
   return true;
 }

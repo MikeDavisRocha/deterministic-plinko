@@ -1,4 +1,4 @@
-import { Risk, RISKS } from "../sim/config";
+import { Risk, RISKS, Rows, ROW_COUNTS } from "../sim/config";
 
 export type Mode = "physics" | "outcome";
 
@@ -8,6 +8,8 @@ type Handlers = {
   onMonte: () => void;
   onMode: (mode: Mode) => void;
   onRisk: (risk: Risk) => void;
+  /** A different row count is a different board, not a different setting. */
+  onRows: (rows: Rows) => void;
   /** A new client seed burns the session: new server seed, new commitment. */
   onClientSeed: (value: string) => void;
   onReveal: () => void;
@@ -48,6 +50,9 @@ export class Controls {
     for (const risk of RISKS) {
       el<HTMLButtonElement>(`risk-${risk}`).onclick = () => h.onRisk(risk);
     }
+    for (const rows of ROW_COUNTS) {
+      el<HTMLButtonElement>(`rows-${rows}`).onclick = () => h.onRows(rows);
+    }
 
     this.clientInput.onchange = () => h.onClientSeed(this.clientSeed);
   }
@@ -69,6 +74,10 @@ export class Controls {
 
   setRisk(risk: Risk) {
     for (const r of RISKS) el(`risk-${r}`).classList.toggle("on", r === risk);
+  }
+
+  setRows(rows: Rows) {
+    for (const r of ROW_COUNTS) el(`rows-${r}`).classList.toggle("on", r === rows);
   }
 
   /** The bet, floored at nothing and never more than the player actually has. */
