@@ -6,7 +6,8 @@ import { Session } from "./fair/session";
 import { steerOf } from "./fair/steer";
 import { Board } from "./sim/Board";
 import { World } from "./sim/World";
-import { monteCarlo } from "./sim/simulate";
+import { MAX_STEPS, monteCarlo } from "./sim/simulate";
+import { StallWatch } from "./sim/stall";
 import { BOARDS, DT, REFERENCE_RTPS, REFERENCE_TABLES, Risk, Rows } from "./sim/config";
 import { DERIVED_RTPS, DERIVED_TABLES } from "./sim/derived";
 import { Renderer } from "./render/Renderer";
@@ -175,6 +176,8 @@ async function boot() {
 
   let world: World | null = null;
   let counted = false;
+  /** Watches for the drop that stops changing; see src/sim/stall.ts. */
+  const stall = new StallWatch();
   let lastSeed = 1;
   let lastNonce = 0;
   /** What the commitment promised for the drop in flight; -1 in Physics-First. */
@@ -207,7 +210,35 @@ async function boot() {
     world = new World(board(), seed);
     counted = false;
     loop.reset();
+    stall.reset();
     controls.setReadout("seed", String(seed));
+  };
+
+  /**
+   * A round that cannot resolve is not a round: the stake goes back and it is
+   * struck from the session's accounting rather than counted as a loss.
+   *
+   * Three drops in 100 million wedge against a wall and never land (ADR 0009).
+   * The measurement excludes them from the distribution, so they were never
+   * part of the RTP the payout tables were solved for — voiding here is what
+   * makes the game agree with the mathematics it advertises. Paying them out as
+   * bin 0, where the disc happens to be hanging, would quietly invent an
+   * outcome the commitment never named.
+   */
+  const voidRound = (why: string) => {
+    const seed = lastSeed;
+    balance += stake;
+    wagered -= stake;
+    stake = 0;
+    world = null;
+    showWallet();
+    controls.setReadout("bin", "void");
+    controls.setReadout("mult", "—");
+    controls.setReadout("payout", "refunded");
+    console.error(
+      `drop ${seed} on the ${rows}-row board ${why}, so the round was voided ` +
+      `and the stake returned. See ADR 0009; the seed is replayable.`,
+    );
   };
 
   /** Physics-First: the seed decides the bin, and the player holds the seed. */
@@ -367,12 +398,21 @@ async function boot() {
     // at 120 Hz and rendering at 60, so reading hits once per frame would drop
     // every second peg the disc touched.
     const alpha = loop.advance(ticker.deltaMS / 1000, () => {
-      if (!world) return;
+      if (!world || world.settled) return;
       world.step(DT);
       if (world.hits.length) {
         const { vx, vy } = world.disc;
         sfx.peg(Math.sqrt(vx * vx + vy * vy));
       }
+      if (world.settled) return;
+
+      // Two guards, and only the first one has ever fired. A repeated state is
+      // proof the drop is over — step() is pure, so it will repeat forever. The
+      // step count is the backstop for anything that fails to resolve without
+      // holding still, and it is MAX_STEPS so that "unsettled" means the same
+      // here as it does in the run the distribution came from.
+      if (stall.repeats(world.disc)) voidRound("stopped changing");
+      else if (world.steps >= MAX_STEPS) voidRound("never settled");
     });
     renderer.draw(world, alpha, ticker.deltaMS);
 

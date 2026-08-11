@@ -200,11 +200,13 @@ draws in 282 ms** (28 µs each).
   and 1.54x on the 8-row one, so the same solve corrects the tail in opposite
   directions on two boards — which is the clearest evidence there is that it
   follows the measurement rather than a habit about tails
-- 3 drops in 100 million never settle, all on the 16-row board. They are named
-  in the artefact and
-  replayable one by one; Outcome-First cannot draw them, because only settled
-  drops enter a seed pool
-- 210 tests, including all 4 992 indexed seeds re-simulated on every run to
+- 3 drops in 100 million never settle: they wedge between a wall and a peg and
+  hold that state exactly, from a basin of spawn positions 2.9e-8 px wide. Named
+  in the artefact, replayable one by one, and voided by the game with the stake
+  returned — Outcome-First cannot draw them at all, because only settled drops
+  enter a seed pool. See
+  [ADR 0009](docs/adr/0009-a-round-that-cannot-resolve-is-voided.md)
+- 229 tests, including all 4 992 indexed seeds re-simulated on every run to
   confirm each lands in the bin it is filed under
 
 ## Run it
@@ -215,7 +217,7 @@ npm run dev
 ```
 
 ```bash
-npm test         # 210 tests
+npm test         # 229 tests
 npm run measure  # regenerate all three boards' distributions + seed indexes
                  #   40 min on 11 shards; takes a row count to do just one
 npm run derived  # print the solved payout tables to paste into derived.ts
@@ -236,6 +238,7 @@ The reasoning lives in [`docs/adr/`](docs/adr), and the domain language in
 6. [Outcome-First steers by seed index](docs/adr/0006-outcome-first-steers-by-seed-index.md)
 7. [Risk is a choice between volatilities, not between values](docs/adr/0007-risk-is-a-choice-between-volatilities.md)
 8. [A row count is a board, not a setting](docs/adr/0008-a-row-count-is-a-board-not-a-setting.md)
+9. [A round that cannot resolve is voided, not paid](docs/adr/0009-a-round-that-cannot-resolve-is-voided.md)
 
 ## Stack
 

@@ -82,6 +82,18 @@ _Avoid_: prize, reward, odds
 `multiplier x bet` for a settled drop. Distinct from [[Multiplier]], which is
 the bin's static factor.
 
+**Void**:
+A round whose [[Drop]] cannot resolve, struck from the session and the stake
+returned. Three drops in 100 million wedge between a wall and a peg and hold
+that state forever; the [[Measured Distribution]] excludes them, so they were
+never part of the RTP the payout tables were solved for, and paying them out
+would invent an outcome. Detected by the drop revisiting a state it has already
+held, which — since a step is a pure function of the previous state — proves it
+can never land. Only [[Physics-First Mode]] can void: the [[Seed Index]] holds
+settled seeds only. See
+docs/adr/0009-a-round-that-cannot-resolve-is-voided.md.
+_Avoid_: cancel, refund, abort, stuck
+
 **RTP** (return to player):
 The long-run ratio of total payout to total bet, as a percentage. Both modes
 target 98.99%, and reach it by opposite routes. Measured RTP and target RTP are
