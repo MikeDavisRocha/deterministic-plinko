@@ -1,5 +1,7 @@
 # Deterministic Plinko
 
+[![ci](https://github.com/MikeDavisRocha/deterministic-plinko/actions/workflows/ci.yml/badge.svg)](https://github.com/MikeDavisRocha/deterministic-plinko/actions/workflows/ci.yml)
+
 **[Play it →](https://mikedavisrocha.github.io/deterministic-plinko/)**
 
 ![The board mid-session, ghost trails accumulating](docs/screenshot.jpg)
@@ -157,13 +159,18 @@ forbids.
 
 ## Engineering
 
-**Bit-exact determinism.** The seeded PRNG is consumed once at spawn; `step()`
-is a pure function of the previous state. The same seed replays the same
-trajectory, verified by comparing 4-tuples of position and velocity with strict
-equality, and pinned by committed hashes of the raw float bit patterns — because
-two engines that disagree by one ULP print identical `toFixed(6)` and differ
-where it matters. `Math.hypot`, `Math.random` and `Date.now` are banned in the
-solver and in the fairness code, and a test reads the sources to enforce it.
+**Bit-exact determinism, checked across three engines.** The seeded PRNG is
+consumed once at spawn; `step()` is a pure function of the previous state. The
+same seed replays the same trajectory, pinned by committed hashes of the raw
+float bit patterns — because two engines that disagree by one ULP print
+identical `toFixed(6)` and differ where it matters.
+
+Node and Chrome are both V8, so passing the suite twice proves nothing about
+that. `npm run cross-engine` recomputes the committed hashes inside Chromium,
+Firefox and WebKit — V8, SpiderMonkey and JavaScriptCore — and all three
+reproduce them bit for bit. CI runs it on every push. `Math.hypot`,
+`Math.random` and `Date.now` are banned in the solver and in the fairness code,
+and a test reads the sources to enforce it.
 
 **Simulation decoupled from rendering.** Nothing under `src/sim/` imports Pixi,
 which is what makes the Monte Carlo trivial. On an AMD Ryzen 5 5500 under Node
