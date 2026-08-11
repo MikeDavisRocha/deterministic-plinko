@@ -191,11 +191,29 @@ async function boot() {
   };
 
   /**
+   * Give back the stake on a drop that is being abandoned mid-fall.
+   *
+   * ADR 0009's rule is about rounds that cannot resolve, and a wedged disc is
+   * the rare way to get one. These are the easy ways: pressing drop again while
+   * a disc is still falling, or switching board, mode or risk mid-fall — both
+   * throw the world away, and both used to keep the money. One is a click away,
+   * so it costs a player far more often than the wedge ever will.
+   */
+  const refundInFlight = () => {
+    if (!world || world.settled || stake <= 0) return;
+    balance += stake;
+    wagered -= stake;
+    stake = 0;
+    showWallet();
+  };
+
+  /**
    * Take the stake before the disc moves. Returns false when the player cannot
    * cover the bet, which is the one case a drop must not start — a round that
    * pays out against money that was never risked is not a round.
    */
   const placeBet = (): boolean => {
+    refundInFlight();
     const bet = controls.bet(balance);
     if (bet <= 0) return false;
     stake = bet;
@@ -267,6 +285,7 @@ async function boot() {
 
   /** Shared by the mode, risk and rows switches: all three change the board. */
   const rebind = (resetTrail: boolean) => {
+    refundInFlight();
     world = null;
     targetBin = -1;
     renderer.setBoard(board());

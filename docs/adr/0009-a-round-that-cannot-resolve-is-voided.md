@@ -91,6 +91,12 @@ practice: hundredths of a second instead of three minutes.
 
 ## Consequences
 
+- **The rule caught two much commoner leaks on its way in.** A wedged disc is
+  the rare way to get a round that cannot resolve. The easy ways are pressing
+  drop again while a disc is still falling, and switching board, mode or risk
+  mid-fall: both threw the world away and kept the stake, and both are one
+  click. They now refund on the same principle, which is the difference between
+  this ADR being a rule and being a special case.
 - **Only Physics-First Mode can ever void a round.** Outcome-First draws its
   seed from the Seed Index, which holds only seeds that settled during the
   measurement, and the suite re-simulates every one of the 4 992 of them on
